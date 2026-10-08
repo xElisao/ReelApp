@@ -10,13 +10,12 @@ st.set_page_config(page_title="Universal Reel Auto-Cutter", page_icon="🎬", la
 st.title("🎬 Universal Creator Reel Auto-Cutter")
 st.caption("Lade Clips hoch – die App zieht sich automatisch abwechslungsreiche Highlights und mischt sie durch.")
 
-# OpenAI API Key Input (Sidebar)
-api_key = st.sidebar.text_input("OpenAI API Key", type="password")
-if not api_key:
-    st.info("👉 Bitte gib in der linken Seitenleiste deinen OpenAI API-Key ein, um zu starten.")
+# OpenAI Client wird direkt sicher aus den Cloud-Secrets geladen
+try:
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+except Exception:
+    st.error("⚠️ OpenAI API Key wurde nicht in den Cloud-Secrets gefunden! Bitte in den Streamlit-Einstellungen hinterlegen.")
     st.stop()
-
-client = OpenAI(api_key=api_key)
 
 # 1. Multi-Video-Upload
 st.subheader("1. Rohvideos hochladen")
