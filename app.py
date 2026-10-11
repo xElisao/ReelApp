@@ -2,31 +2,28 @@ import streamlit as st
 
 st.title("🎬 VeloCut - AI Reel Auto-Cutter")
 
-# 1. Hier wird geprüft, ob jemand mit dem Parameter ?access=granted zurückkommt
+# 1. URL-Parameter prüfen
 query_params = st.query_params
 if "access" in query_params and query_params["access"] == "granted":
     st.session_state["pro_access"] = True
 
-# 2. DIE PAYWALL: Wenn NICHT bezahlt wurde -> Zeige nur den Kaufen-Button
+# 2. Die Paywall (wenn NICHT bezahlt)
 if not st.session_state.get("pro_access", False):
     st.warning("🔒 Dies ist die Pro-Version von VeloCut. Bitte schalte den Zugang frei, um unbegrenzt Reels zu schneiden.")
     
-    # Füge hier deinen echten Stripe-Testlink ein:
-    stripe_link = "https://buy.stripe.com/test_dein_link_hier"
+    stripe_link = "DEIN_ECHTER_STRIPE_LINK"
     st.link_button("🚀 VeloCut Pro freischalten (14,99 €)", stripe_link, use_container_width=True)
 
-# 3. DAS ECHTE PROGRAMM: Wenn bezahlt wurde -> Zeige den Cutter
+# 3. Das echte Programm (NUR wenn bezahlt wurde!)
 else:
     st.success("🎉 Pro-Zugang aktiv! Viel Spaß beim Erstellen deiner Reels.")
     
-    # ==========================================
-    # AB HIER KOPPIERST DU DEINEN GESAMTEN BISHERIGEN CODE HIN:
-    # (Upload, Content-Nische, Slider, OpenAI-Verarbeitung etc.)
-    # ==========================================
-    
+    # -------------------------------------------------------------
+    # AB HIER GEHÖRT DEIN GESAMTER BISHERIGER CODE HIN (Eingerückt!)
+    # -------------------------------------------------------------
     uploaded_files = st.file_uploader("Rohvideos hochladen", type=["mp4", "mov"], accept_multiple_files=True)
     
-    # (Dein restlicher Code für den Videoschnitt...)
+    # Rest deines Codes...
 import streamlit as st
 from openai import OpenAI
 import os
