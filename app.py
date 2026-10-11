@@ -53,14 +53,24 @@ if not st.session_state["user_email"]:
     
     email_input = st.text_input("E-Mail-Adresse eingeben:")
     
+# E-Mail Login für bereits bezahlte Käufer
+    st.subheader("Bereits gekauft?")
+    st.markdown("Gib hier deine E-Mail-Adresse ein, mit der du bei Stripe bezahlt hast:")
+    
+    email_input = st.text_input("E-Mail-Adresse eingeben:")
+    
     if st.button("Einloggen"):
         if not email_input:
             st.warning("Bitte gib eine E-Mail-Adresse ein.")
         else:
             try:
-                # Verbindung zur Google Sheets Kundendatenbank herstellen
-                conn = st.connection("gsheets", type="gsheets")
-                df = conn.read(worksheet="Sheet1", usecols=[0], ttl=0)
+                import pandas as pd
+                
+                # Trage hier den Link zu deiner öffentlichen CSV-Tabelle ein (siehe Anleitung unten)
+                # Alternativ kannst du die CSV-Export-URL deines Google Sheets nutzen:
+                sheet_url = "HIER_DEINE_GOOGLE_SHEET_CSV_URL_EINTRAGEN"
+                
+                df = pd.read_csv(sheet_url)
                 
                 # Bereinigen und Prüfen, ob die E-Mail in der Tabelle existiert
                 df["email_clean"] = df.iloc[:, 0].astype(str).str.strip().str.lower()
@@ -71,10 +81,10 @@ if not st.session_state["user_email"]:
                     st.success("Erfolgreich eingeloggt! Willkommen zurück.")
                     st.rerun()
                 else:
-                    st.error("Diese E-Mail-Adresse wurde in unserer Kaufliste nicht gefunden. Hast du bereits bezahlt?")
+                    st.error("Diese E-Mail-Adresse wurde in unserer Kaufliste nicht gefunden. Hast du schon bezahlt oder ist der Webhook noch unterwegs?")
             except Exception as e:
-                st.error(f"Verbindungsfehler zur Datenbank: {e}")
-
+                st.error(f"Fehler beim Auslesen der Tabelle: {e}")
+             
     # Sidebar Kauf-Button für Besucher
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
