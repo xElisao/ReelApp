@@ -7,16 +7,17 @@ from moviepy import VideoFileClip, concatenate_videoclips
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
 
-# 1. URL-Parameter prüfen
-query_params = st.query_params
-if "access" in query_params and query_params["access"] == "granted":
-    st.session_state["pro_access"] = True
-
-# Deaktivierter Stripe-Link
+# Stripe Live-Link
 stripe_test_link = "https://buy.stripe.com/aFa8wP6aXgCa7Zt6BubEA01"
 
-# 2. DIE PAYWALL & LANDING PAGE (wenn NICHT bezahlt)
-if not st.session_state.get("pro_access", False):
+# Session State für den E-Mail-Login initialisieren
+if "user_email" not in st.session_state:
+    st.session_state["user_email"] = None
+
+# ==========================================
+# 1. BEREICH: PAYWALL & LANDING PAGE (wenn NICHT eingeloggt)
+# ==========================================
+if not st.session_state["user_email"]:
     
     # Modernes Hero-Layout für die Startseite
     st.markdown("<h1 style='text-align: center;'>🎬 VeloCut</h1>", unsafe_allow_html=True)
@@ -44,18 +45,55 @@ if not st.session_state.get("pro_access", False):
     # Großer, zentraler Call-to-Action Button
     st.link_button("🚀 VeloCut Pro jetzt freischalten (14,99 €)", stripe_test_link, use_container_width=True)
 
+    st.markdown("---")
+    
+    # E-Mail Login für bereits bezahlte Käufer
+    st.subheader("Bereits gekauft?")
+    st.markdown("Gib hier deine E-Mail-Adresse ein, mit der du bei Stripe bezahlt hast:")
+    
+    email_input = st.text_input("E-Mail-Adresse eingeben:")
+    
+    if st.button("Einloggen"):
+        if not email_input:
+            st.warning("Bitte gib eine E-Mail-Adresse ein.")
+        else:
+            try:
+                # Verbindung zur Google Sheets Kundendatenbank herstellen
+                conn = st.connection("gsheets", type="gsheets")
+                df = conn.read(worksheet="Sheet1", usecols=[0], ttl=0)
+                
+                # Bereinigen und Prüfen, ob die E-Mail in der Tabelle existiert
+                df["email_clean"] = df.iloc[:, 0].astype(str).str.strip().str.lower()
+                clean_input = email_input.strip().lower()
+                
+                if clean_input in df["email_clean"].values:
+                    st.session_state["user_email"] = email_input
+                    st.success("Erfolgreich eingeloggt! Willkommen zurück.")
+                    st.rerun()
+                else:
+                    st.error("Diese E-Mail-Adresse wurde in unserer Kaufliste nicht gefunden. Hast du bereits bezahlt?")
+            except Exception as e:
+                st.error(f"Verbindungsfehler zur Datenbank: {e}")
+
     # Sidebar Kauf-Button für Besucher
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
     st.sidebar.write("Schalte unbegrenzte KI-Reels frei!")
     st.sidebar.link_button("🚀 Pro-Zugang kaufen (14,99 €)", stripe_test_link)
 
-# 3. DAS ECHTE PROGRAMM (NUR wenn bezahlt wurde!)
+# ==========================================
+# 2. BEREICH: DAS ECHTE PROGRAMM (NUR wenn eingeloggt!)
+# ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
     st.caption("Lade Clips hoch – die App zieht sich automatisch abwechslungsreiche Highlights und mischt sie durch.")
     
-    st.success("🎉 Pro-Zugang aktiv! Viel Spaß beim Erstellen deiner Reels.")
+    st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
+    
+    # Abmelden-Button in der Sidebar
+    if st.sidebar.button("Abmelden"):
+        st.session_state["user_email"] = None
+        st.rerun()
     
     # Sidebar Status für Pro-Nutzer
     st.sidebar.markdown("---")
