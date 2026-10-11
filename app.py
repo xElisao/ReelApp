@@ -3,6 +3,7 @@ from openai import OpenAI
 import os
 import random
 from moviepy import VideoFileClip, concatenate_videoclips
+import pandas as pd
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
@@ -53,23 +54,13 @@ if not st.session_state["user_email"]:
     
     email_input = st.text_input("E-Mail-Adresse eingeben:")
     
-# E-Mail Login für bereits bezahlte Käufer
-    st.subheader("Bereits gekauft?")
-    st.markdown("Gib hier deine E-Mail-Adresse ein, mit der du bei Stripe bezahlt hast:")
-    
-    email_input = st.text_input("E-Mail-Adresse eingeben:")
-    
     if st.button("Einloggen"):
         if not email_input:
             st.warning("Bitte gib eine E-Mail-Adresse ein.")
         else:
             try:
-                import pandas as pd
-                
-                # Trage hier den Link zu deiner öffentlichen CSV-Tabelle ein (siehe Anleitung unten)
-                # Alternativ kannst du die CSV-Export-URL deines Google Sheets nutzen:
-                sheet_url = "HIER_DEINE_GOOGLE_SHEET_CSV_URL_EINTRAGEN"
-                
+                # Direkter CSV-Abruf deiner Google-Tabelle
+                sheet_url = "https://docs.google.com/spreadsheets/d/1Ha38mXPbP8IVCfeteG4WmQqVWnRzFfzSNTWUw7GsWRE/gviz/tq?tqx=out:csv&sheet=Sheet1"
                 df = pd.read_csv(sheet_url)
                 
                 # Bereinigen und Prüfen, ob die E-Mail in der Tabelle existiert
@@ -81,10 +72,10 @@ if not st.session_state["user_email"]:
                     st.success("Erfolgreich eingeloggt! Willkommen zurück.")
                     st.rerun()
                 else:
-                    st.error("Diese E-Mail-Adresse wurde in unserer Kaufliste nicht gefunden. Hast du schon bezahlt oder ist der Webhook noch unterwegs?")
+                    st.error("Diese E-Mail-Adresse wurde in der Kaufliste nicht gefunden. (Falls du gerade erst gekauft hast, warte 1-2 Sekunden und versuche es noch einmal).")
             except Exception as e:
                 st.error(f"Fehler beim Auslesen der Tabelle: {e}")
-             
+
     # Sidebar Kauf-Button für Besucher
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
