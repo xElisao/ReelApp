@@ -111,7 +111,7 @@ else:
     # 1. Multi-Video-Upload
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus (egal ob iPhone, Android oder PC - MOV, MP4, etc.)", 
+        "Wähle deine Videos aus (egal ob iPhone, Android oder PC)", 
         type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
@@ -140,7 +140,7 @@ else:
     # Ausführen-Button
     if st.button("🚀 Intelligentes Multi-Clip-Reel generieren", type="primary"):
         if not uploaded_files:
-            st.warning("Bitte lade mindestens ein Videodatei hoch.")
+            st.warning("Bitte lade mindestens eine Videodatei hoch.")
             st.stop()
         
         output_path = os.path.join(".", "final_dynamic_reel.mp4")
@@ -148,34 +148,19 @@ else:
         clips_to_concat = []
 
         try:
-            st.info("📁 Verarbeite und normalisiere hochgeladene Clips (egal ob iOS, Android oder PC)...")
+            st.info("📁 Analysiere und verarbeite hochgeladene Clips...")
 
             total_items = len(uploaded_files)
             subclip_duration = max(3.0, target_duration / max(1, total_items))
 
             for idx, uploaded_file in enumerate(uploaded_files):
-                raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
-                safe_path = os.path.join(".", f"safe_{idx}.mp4")
-                
-                with open(raw_path, "wb") as f:
+                temp_path = os.path.join(".", f"temp_{idx}_{uploaded_file.name}")
+                with open(temp_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-                temp_files.append(raw_path)
-                temp_files.append(safe_path)
+                temp_files.append(temp_path)
 
-                # WICHTIG: Das Video vorab mit FFmpeg in ein universelles, fehlerfreies MP4-Format konvertieren.
-                # Das bereinigt Apple/Android-Metadaten, Audiotags und HDR-Probleme komplett!
-                import subprocess
-                conversion_command = [
-                    "ffmpeg", "-y", "-i", raw_path,
-                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
-                    "-c:a", "aac", "-b:a", "128k",
-                    "-map", "0:v:0", "-map", "0:a?",
-                    "-shortest", safe_path
-                ]
-                subprocess.run(conversion_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
-
-                # Jetzt liest MoviePy die standardisierte Datei absolut problemlos ein
-                clip = VideoFileClip(safe_path)
+                # Direktes Laden über MoviePy (nutzt das integrierte imageio-ffmpeg automatisch)
+                clip = VideoFileClip(temp_path)
                 dur = clip.duration
                 
                 if dur > (subclip_duration + 5):
@@ -216,7 +201,7 @@ else:
 
         except Exception as e:
             st.error(f"Fehler bei der Videoverarbeitung: {e}")
-            st.info("Tipp: Stelle sicher, dass die Videodateien nicht beschädigt sind.")
+            st.info("Tipp: Stelle sicher, dass die Videodatei unbeschädigt ist.")
 
         for tf in temp_files:
             if os.path.exists(tf):
