@@ -2,6 +2,7 @@ import streamlit as st
 from openai import OpenAI
 import os
 import random
+import cv2
 from moviepy import VideoFileClip, concatenate_videoclips
 import pandas as pd
 
@@ -30,13 +31,11 @@ if "user_email" not in st.session_state:
 # ==========================================
 if not st.session_state["user_email"]:
     
-    # Modernes Hero-Layout für die Startseite
     st.markdown("<h1 style='text-align: center;'>🎬 VeloCut</h1>", unsafe_allow_html=True)
     st.markdown("<h3 style='text-align: center; color: gray;'>Verwandle rohes Material in Sekunden in virale Highlight-Reels</h3>", unsafe_allow_html=True)
     
     st.markdown("---")
     
-    # Wertversprechen / Features
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("⚡ **Blitzschnell**")
@@ -50,15 +49,12 @@ if not st.session_state["user_email"]:
         
     st.markdown("---")
     
-    # Kaufen-Bereich in der Mitte
     st.info("🔒 **VeloCut Pro** ist ein Premium-Tool. Schalte den unbegrenzten Zugang für eine einmalige Zahlung frei.")
     
-    # Großer, zentraler Call-to-Action Button
     st.link_button("🚀 VeloCut Pro jetzt freischalten (14,99 €)", stripe_test_link, use_container_width=True)
 
     st.markdown("---")
     
-    # E-Mail Login für bereits bezahlte Käufer
     st.subheader("Bereits gekauft?")
     st.markdown("Gib hier deine E-Mail-Adresse ein, mit der du bei Stripe bezahlt hast:")
     
@@ -69,11 +65,9 @@ if not st.session_state["user_email"]:
             st.warning("Bitte gib eine E-Mail-Adresse ein.")
         else:
             try:
-                # Direkter CSV-Abruf deiner Google-Tabelle
                 sheet_url = "https://docs.google.com/spreadsheets/d/1Ha38mXPbP8IVCfeteG4WmQqVWnRzFfzSNTWUw7GsWRE/gviz/tq?tqx=out:csv&sheet=Sheet1"
                 df = pd.read_csv(sheet_url)
                 
-                # Bereinigen und Prüfen, ob die E-Mail in der Tabelle existiert
                 df["email_clean"] = df.iloc[:, 0].astype(str).str.strip().str.lower()
                 clean_input = email_input.strip().lower()
                 
@@ -82,11 +76,10 @@ if not st.session_state["user_email"]:
                     st.success("Erfolgreich eingeloggt! Willkommen zurück.")
                     st.rerun()
                 else:
-                    st.error("Diese E-Mail-Adresse wurde in der Kaufliste nicht gefunden. (Falls du gerade erst gekauft hast, warte 1-2 Sekunden und versuche es noch einmal).")
+                    st.error("Diese E-Mail-Adresse wurde in der Kaufliste nicht gefunden.")
             except Exception as e:
                 st.error(f"Fehler beim Auslesen der Tabelle: {e}")
 
-    # Sidebar Kauf-Button für Besucher
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
     st.sidebar.write("Schalte unbegrenzte KI-Reels frei!")
@@ -101,24 +94,20 @@ else:
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
-    # Abmelden-Button in der Sidebar
     if st.sidebar.button("Abmelden"):
         st.session_state["user_email"] = None
         st.rerun()
     
-    # Sidebar Status für Pro-Nutzer
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
     st.sidebar.success("Aktiviert ✅")
 
-    # OpenAI Client wird direkt sicher aus den Cloud-Secrets geladen
     try:
         client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
     except Exception:
-        st.error("⚠️ OpenAI API Key wurde nicht in den Cloud-Secrets gefunden! Bitte in den Streamlit-Einstellungen hinterlegen.")
+        st.error("⚠️ OpenAI API Key wurde nicht in den Cloud-Secrets gefunden!")
         st.stop()
 
-    # 1. Multi-Video-Upload
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
         "Wähle deine Videos aus (egal ob iPhone, Android oder PC)", 
@@ -126,7 +115,6 @@ else:
         accept_multiple_files=True
     )
 
-    # 2. Setup & Stil
     st.subheader("2. Setup & Ziel")
     col1, col2 = st.columns(2)
     with col1:
@@ -147,7 +135,6 @@ else:
         height=70
     )
 
-    # Ausführen-Button
     if st.button("🚀 Intelligentes Multi-Clip-Reel generieren", type="primary"):
         if not uploaded_files:
             st.warning("Bitte lade mindestens eine Videodatei hoch.")
@@ -158,7 +145,7 @@ else:
         clips_to_concat = []
 
         try:
-            st.info("📁 Analysiere und verarbeite hochgeladene Clips...")
+            st.info("📁 Analysiere und verarbeite hochgeladene Clips stabil...")
 
             total_items = len(uploaded_files)
             subclip_duration = max(3.0, target_duration / max(1, total_items))
@@ -169,10 +156,20 @@ else:
                     f.write(uploaded_file.getbuffer())
                 temp_files.append(temp_path)
 
-                # WICHTIG: Audiotrack erzwingen und Metadaten-Fehler abfangen
-                clip = VideoFileClip(temp_path, audio=True, target_resolution=None)
-                dur = clip.duration
-                
+                # OpenCV nutzen, um die exakte Videolänge fehlerfrei zu ermitteln (ignoriert Apple-Metadata-Spuren)
+                cap = cv2.VideoCapture(temp_path)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                cap.release()
+
+                dur = frame_count / fps if fps > 0 else 0
+
+                # Fallback, falls OpenCV die Länge nicht lesen kann
+                if dur <= 0:
+                    temp_clip_check = VideoFileClip(temp_path)
+                    dur = temp_clip_check.duration
+                    temp_clip_check.close()
+
                 if dur > (subclip_duration + 5):
                     max_start = dur - subclip_duration
                     start = min(max_start, (idx * 4.0) % max_start) if max_start > 0 else 0.0
@@ -181,6 +178,8 @@ else:
 
                 end = min(start + subclip_duration, dur)
                 
+                # Clip sauber einlesen und zuschneiden
+                clip = VideoFileClip(temp_path)
                 sub = clip.subclipped(start, end)
                 clips_to_concat.append(sub)
 
@@ -211,7 +210,6 @@ else:
 
         except Exception as e:
             st.error(f"Fehler bei der Videoverarbeitung: {e}")
-            st.info("Tipp: iPhone-Videos mit speziellen Effekten oder HDR lassen sich am stabilsten verarbeiten, wenn sie vorher einmal kurz gekürzt oder konvertiert wurden.")
 
         for tf in temp_files:
             if os.path.exists(tf):
