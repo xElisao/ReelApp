@@ -13,7 +13,7 @@ if "access" in query_params and query_params["access"] == "granted":
     st.session_state["pro_access"] = True
 
 # Deaktivierter Stripe-Link
-stripe_test_link = "https://buy.stripe.com/test_7sY4gB4KD8Ru3D26Zpd7q00"
+stripe_test_link = "https://buy.stripe.com/aFa8wP6aXgCa7Zt6BubEA01"
 
 # 2. DIE PAYWALL & LANDING PAGE (wenn NICHT bezahlt)
 if not st.session_state.get("pro_access", False):
