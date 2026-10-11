@@ -8,6 +8,16 @@ import pandas as pd
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
 
+# GitHub-Menü, Kopfzeile und Fußzeile komplett ausblenden für maximale Privatsphäre
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 # Stripe Live-Link
 stripe_test_link = "https://buy.stripe.com/aFa8wP6aXgCa7Zt6BubEA01"
 
