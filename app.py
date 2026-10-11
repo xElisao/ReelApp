@@ -169,8 +169,8 @@ else:
                     f.write(uploaded_file.getbuffer())
                 temp_files.append(temp_path)
 
-                # Direktes Laden über MoviePy (nutzt das integrierte imageio-ffmpeg automatisch)
-                clip = VideoFileClip(temp_path)
+                # WICHTIG: Audiotrack erzwingen und Metadaten-Fehler abfangen
+                clip = VideoFileClip(temp_path, audio=True, target_resolution=None)
                 dur = clip.duration
                 
                 if dur > (subclip_duration + 5):
@@ -211,7 +211,7 @@ else:
 
         except Exception as e:
             st.error(f"Fehler bei der Videoverarbeitung: {e}")
-            st.info("Tipp: Stelle sicher, dass die Videodatei unbeschädigt ist.")
+            st.info("Tipp: iPhone-Videos mit speziellen Effekten oder HDR lassen sich am stabilsten verarbeiten, wenn sie vorher einmal kurz gekürzt oder konvertiert wurden.")
 
         for tf in temp_files:
             if os.path.exists(tf):
