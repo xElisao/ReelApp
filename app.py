@@ -111,8 +111,8 @@ else:
     # 1. Multi-Video-Upload
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus (du kannst auch dasselbe Video mehrfach hochladen!)", 
-        type=["mp4", "mov"], 
+        "Wähle deine Videos aus (egal ob iPhone, Android oder PC - MOV, MP4, etc.)", 
+        type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
 
@@ -148,18 +148,34 @@ else:
         clips_to_concat = []
 
         try:
-            st.info("📁 Analysiere Clips und wähle abwechslungsreiche Highlights aus...")
+            st.info("📁 Verarbeite und normalisiere hochgeladene Clips (egal ob iOS, Android oder PC)...")
 
             total_items = len(uploaded_files)
             subclip_duration = max(3.0, target_duration / max(1, total_items))
 
             for idx, uploaded_file in enumerate(uploaded_files):
-                temp_path = os.path.join(".", f"temp_{idx}_{uploaded_file.name}")
-                with open(temp_path, "wb") as f:
+                raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
+                safe_path = os.path.join(".", f"safe_{idx}.mp4")
+                
+                with open(raw_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-                temp_files.append(temp_path)
+                temp_files.append(raw_path)
+                temp_files.append(safe_path)
 
-                clip = VideoFileClip(temp_path)
+                # WICHTIG: Das Video vorab mit FFmpeg in ein universelles, fehlerfreies MP4-Format konvertieren.
+                # Das bereinigt Apple/Android-Metadaten, Audiotags und HDR-Probleme komplett!
+                import subprocess
+                conversion_command = [
+                    "ffmpeg", "-y", "-i", raw_path,
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-b:a", "128k",
+                    "-map", "0:v:0", "-map", "0:a?",
+                    "-shortest", safe_path
+                ]
+                subprocess.run(conversion_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+
+                # Jetzt liest MoviePy die standardisierte Datei absolut problemlos ein
+                clip = VideoFileClip(safe_path)
                 dur = clip.duration
                 
                 if dur > (subclip_duration + 5):
@@ -174,12 +190,19 @@ else:
                 clips_to_concat.append(sub)
 
             final_reel = concatenate_videoclips(clips_to_concat, method="compose")
-            final_reel.write_videofile(output_path, codec="libx264", audio_codec="aac")
+            final_reel.write_videofile(
+                output_path, 
+                codec="libx264", 
+                audio_codec="aac", 
+                fps=30, 
+                preset="medium", 
+                threads=4
+            )
 
             for c in clips_to_concat:
                 c.close()
 
-            st.success("✅ Fertig! Verschiedene Highlights wurden dynamisch extrahiert und zusammengefügt.")
+            st.success("✅ Fertig! Das Reel wurde erfolgreich generiert.")
             
             st.video(output_path)
             
@@ -193,6 +216,7 @@ else:
 
         except Exception as e:
             st.error(f"Fehler bei der Videoverarbeitung: {e}")
+            st.info("Tipp: Stelle sicher, dass die Videodateien nicht beschädigt sind.")
 
         for tf in temp_files:
             if os.path.exists(tf):
