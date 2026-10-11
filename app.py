@@ -145,30 +145,46 @@ else:
         clips_to_concat = []
 
         try:
-            st.info("📁 Analysiere und verarbeite hochgeladene Clips stabil...")
+            st.info("📁 Bereinige und verarbeite hochgeladene Clips...")
 
             total_items = len(uploaded_files)
             subclip_duration = max(3.0, target_duration / max(1, total_items))
 
             for idx, uploaded_file in enumerate(uploaded_files):
-                temp_path = os.path.join(".", f"temp_{idx}_{uploaded_file.name}")
-                with open(temp_path, "wb") as f:
+                raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
+                clean_path = os.path.join(".", f"clean_{idx}.mp4")
+                
+                with open(raw_path, "wb") as f:
                     f.write(uploaded_file.getbuffer())
-                temp_files.append(temp_path)
+                temp_files.append(raw_path)
+                temp_files.append(clean_path)
 
-                # OpenCV nutzen, um die exakte Videolänge fehlerfrei zu ermitteln (ignoriert Apple-Metadata-Spuren)
-                cap = cv2.VideoCapture(temp_path)
+                cap = cv2.VideoCapture(raw_path)
                 fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps <= 0 or fps > 120:
+                    fps = 30.0
+                
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                cap.release()
-
                 dur = frame_count / fps if fps > 0 else 0
 
-                # Fallback, falls OpenCV die Länge nicht lesen kann
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(clean_path, fourcc, fps, (width, height))
+
+                while cap.isOpened():
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    out.write(frame)
+                
+                cap.release()
+                out.release()
+
                 if dur <= 0:
-                    temp_clip_check = VideoFileClip(temp_path)
-                    dur = temp_clip_check.duration
-                    temp_clip_check.close()
+                    temp_check = VideoFileClip(clean_path)
+                    dur = temp_check.duration
+                    temp_check.close()
 
                 if dur > (subclip_duration + 5):
                     max_start = dur - subclip_duration
@@ -178,8 +194,7 @@ else:
 
                 end = min(start + subclip_duration, dur)
                 
-                # Clip sauber einlesen und zuschneiden
-                clip = VideoFileClip(temp_path)
+                clip = VideoFileClip(clean_path)
                 sub = clip.subclipped(start, end)
                 clips_to_concat.append(sub)
 
