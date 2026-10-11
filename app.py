@@ -7,9 +7,6 @@ from moviepy import VideoFileClip, concatenate_videoclips
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
 
-st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-st.caption("Lade Clips hoch – die App zieht sich automatisch abwechslungsreiche Highlights und mischt sie durch.")
-
 # 1. URL-Parameter prüfen
 query_params = st.query_params
 if "access" in query_params and query_params["access"] == "granted":
@@ -18,11 +15,34 @@ if "access" in query_params and query_params["access"] == "granted":
 # Deaktivierter Stripe-Link
 stripe_test_link = "https://buy.stripe.com/test_7sY4gB4KD8Ru3D26Zpd7q00"
 
-# 2. Die Paywall (wenn NICHT bezahlt)
+# 2. DIE PAYWALL & LANDING PAGE (wenn NICHT bezahlt)
 if not st.session_state.get("pro_access", False):
-    st.warning("🔒 Dies ist die Pro-Version von VeloCut. Bitte schalte den Zugang frei, um unbegrenzt Reels zu schneiden.")
     
-    st.link_button("🚀 VeloCut Pro freischalten (14,99 €)", stripe_test_link, use_container_width=True)
+    # Modernes Hero-Layout für die Startseite
+    st.markdown("<h1 style='text-align: center;'>🎬 VeloCut</h1>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; color: gray;'>Verwandle rohes Material in Sekunden in virale Highlight-Reels</h3>", unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Wertversprechen / Features
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("⚡ **Blitzschnell**")
+        st.write("Automatischer Schnitt in wenigen Sekunden.")
+    with col2:
+        st.markdown("🎯 **Intelligent**")
+        st.write("Zieht die besten Passagen aus deinen Clips.")
+    with col3:
+        st.markdown("🚀 **Ready to Post**")
+        st.write("Perfekt für Reels, Shorts & TikToks.")
+        
+    st.markdown("---")
+    
+    # Kaufen-Bereich in der Mitte
+    st.info("🔒 **VeloCut Pro** ist ein Premium-Tool. Schalte den unbegrenzten Zugang für eine einmalige Zahlung frei.")
+    
+    # Großer, zentraler Call-to-Action Button
+    st.link_button("🚀 VeloCut Pro jetzt freischalten (14,99 €)", stripe_test_link, use_container_width=True)
 
     # Sidebar Kauf-Button für Besucher
     st.sidebar.markdown("---")
@@ -30,8 +50,11 @@ if not st.session_state.get("pro_access", False):
     st.sidebar.write("Schalte unbegrenzte KI-Reels frei!")
     st.sidebar.link_button("🚀 Pro-Zugang kaufen (14,99 €)", stripe_test_link)
 
-# 3. Das echte Programm (NUR wenn bezahlt wurde!)
+# 3. DAS ECHTE PROGRAMM (NUR wenn bezahlt wurde!)
 else:
+    st.title("🎬 VeloCut - AI Reel Auto-Cutter")
+    st.caption("Lade Clips hoch – die App zieht sich automatisch abwechslungsreiche Highlights und mischt sie durch.")
+    
     st.success("🎉 Pro-Zugang aktiv! Viel Spaß beim Erstellen deiner Reels.")
     
     # Sidebar Status für Pro-Nutzer
