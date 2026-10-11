@@ -120,3 +120,13 @@ if st.button("🚀 Intelligentes Multi-Clip-Reel generieren", type="primary"):
     for tf in temp_files:
         if os.path.exists(tf):
             os.remove(tf)
+
+# Stripe Bezahl-Button in der Sidebar
+st.sidebar.markdown("---")
+st.sidebar.subheader("💎 VeloCut Pro")
+st.sidebar.write("Schalte unbegrenzte KI-Reels frei!")
+
+# Ersetze den Text unten in den Anführungszeichen mit deinem echten Stripe-Testlink:
+stripe_test_link = "https://buy.stripe.com/test_7sY4gB4KD8Ru3D26Zpd7q00"
+
+st.sidebar.link_button("🚀 Pro-Zugang kaufen (14,99 €)", stripe_test_link)
