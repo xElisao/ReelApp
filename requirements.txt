@@ -1,3 +1,5 @@
 streamlit
 openai
 moviepy
+pandas
+opencv-python-headless
