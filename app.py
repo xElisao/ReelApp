@@ -4,7 +4,7 @@ import os
 import random
 import cv2
 from moviepy import VideoFileClip, concatenate_videoclips
-import pandas as pd
+import stripe
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
@@ -19,8 +19,14 @@ header {visibility: hidden;}
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Stripe Live-Link
+# Stripe Live-Link für den Kaufen-Button
 stripe_test_link = "https://buy.stripe.com/aFa8wP6aXgCa7Zt6BubEA01"
+
+# Stripe API Key aus den Streamlit Secrets laden
+try:
+    stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
+except Exception:
+    pass
 
 # Session State für den E-Mail-Login initialisieren
 if "user_email" not in st.session_state:
@@ -64,21 +70,36 @@ if not st.session_state["user_email"]:
         if not email_input:
             st.warning("Bitte gib eine E-Mail-Adresse ein.")
         else:
+            clean_input = email_input.strip().lower()
+            
+            # Master-Override für dich selbst (optional, falls du dich immer einloggen willst)
+            admin_emails = ["elias.krainer@icloud.com"] # Hier deine E-Mail eintragen falls gewünscht
+            
+            if clean_input in [e.lower() for e in admin_emails]:
+                st.session_state["user_email"] = email_input
+                st.success("Erfolgreich eingeloggt! (Admin-Zugang)")
+                st.rerun()
+
             try:
-                sheet_url = "https://docs.google.com/spreadsheets/d/1Ha38mXPbP8IVCfeteG4WmQqVWnRzFfzSNTWUw7GsWRE/gviz/tq?tqx=out:csv&sheet=Sheet1"
-                df = pd.read_csv(sheet_url)
+                # Direkte Abfrage bei Stripe, ob die E-Mail bezahlt hat
+                sessions = stripe.checkout.Session.list(limit=100)
+                paid = False
                 
-                df["email_clean"] = df.iloc[:, 0].astype(str).str.strip().str.lower()
-                clean_input = email_input.strip().lower()
+                for session in sessions.data:
+                    customer_email = session.get("customer_details", {}).get("email") or session.get("customer_email")
+                    if customer_email and customer_email.strip().lower() == clean_input:
+                        if session.get("payment_status") == "paid":
+                            paid = True
+                            break
                 
-                if clean_input in df["email_clean"].values:
+                if paid:
                     st.session_state["user_email"] = email_input
-                    st.success("Erfolgreich eingeloggt! Willkommen zurück.")
+                    st.success("Erfolgreich eingeloggt! Pro-Zugang verifiziert.")
                     st.rerun()
                 else:
-                    st.error("Diese E-Mail-Adresse wurde in der Kaufliste nicht gefunden.")
+                    st.error("Kein aktiver Kauf für diese E-Mail-Adresse bei Stripe gefunden. (Falls du gerade erst bezahlt hast, versuche es in wenigen Sekunden noch einmal).")
             except Exception as e:
-                st.error(f"Fehler beim Auslesen der Tabelle: {e}")
+                st.error(f"Fehler bei der Stripe-Verifizierung: {e}")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
@@ -229,3 +250,4 @@ else:
         for tf in temp_files:
             if os.path.exists(tf):
                 os.remove(tf)
+                
