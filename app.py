@@ -73,7 +73,7 @@ if not st.session_state["user_email"]:
             clean_input = email_input.strip().lower()
             
             # Master-Override für dich selbst (optional, falls du dich immer einloggen willst)
-            admin_emails = ["elias.krainer@icloud.com"] # Hier deine E-Mail eintragen falls gewünscht
+            admin_emails = ["elias.krainer@icloud.com", "krainerelias@gmx.at"]
             
             if clean_input in [e.lower() for e in admin_emails]:
                 st.session_state["user_email"] = email_input
@@ -86,9 +86,10 @@ if not st.session_state["user_email"]:
                 paid = False
                 
                 for session in sessions.data:
-                    customer_email = session.get("customer_details", {}).get("email") or session.get("customer_email")
+                    s_dict = session.to_dict()
+                    customer_email = s_dict.get("customer_details", {}).get("email") or s_dict.get("customer_email")
                     if customer_email and customer_email.strip().lower() == clean_input:
-                        if session.get("payment_status") == "paid":
+                        if s_dict.get("payment_status") == "paid":
                             paid = True
                             break
                 
@@ -250,4 +251,3 @@ else:
         for tf in temp_files:
             if os.path.exists(tf):
                 os.remove(tf)
-                
