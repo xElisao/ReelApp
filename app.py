@@ -166,80 +166,82 @@ else:
         clips_to_concat = []
 
         try:
-            st.info("📁 Bereinige und verarbeite hochgeladene Clips...")
+            with st.status("📁 Verarbeite hochgeladene Clips...", expanded=True) as status:
+                total_items = len(uploaded_files)
+                subclip_duration = max(3.0, target_duration / max(1, total_items))
 
-            total_items = len(uploaded_files)
-            subclip_duration = max(3.0, target_duration / max(1, total_items))
-
-            for idx, uploaded_file in enumerate(uploaded_files):
-                raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
-                clean_path = os.path.join(".", f"clean_{idx}.mp4")
-                
-                with open(raw_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                temp_files.append(raw_path)
-                temp_files.append(clean_path)
-
-                cap = cv2.VideoCapture(raw_path)
-                fps = cap.get(cv2.CAP_PROP_FPS)
-                if fps <= 0 or fps > 120:
-                    fps = 30.0
-                
-                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                dur = frame_count / fps if fps > 0 else 0
-
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                out = cv2.VideoWriter(clean_path, fourcc, fps, (width, height))
-
-                while cap.isOpened():
-                    ret, frame = cap.read()
-                    if not ret:
-                        break
-                    out.write(frame)
-                
-                cap.release()
-                out.release()
-
-                if dur <= 0:
-                    temp_check = VideoFileClip(clean_path)
-                    dur = temp_check.duration
-                    temp_check.close()
-
-                if dur > (subclip_duration + 5):
-                    max_start = dur - subclip_duration
-                    start = min(max_start, (idx * 4.0) % max_start) if max_start > 0 else 0.0
-                else:
-                    start = 0.0
-
-                end = min(start + subclip_duration, dur)
-                
-                clip = VideoFileClip(clean_path)
-                
-                # Automatische Erkennung, welche MoviePy-Methode verfügbar ist
-                if hasattr(clip, "subclipped"):
-                    sub = clip.subclipped(start, end)
-                else:
-                    sub = clip.subclip(start, end)
+                for idx, uploaded_file in enumerate(uploaded_files):
+                    raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
+                    clean_path = os.path.join(".", f"clean_{idx}.mp4")
                     
-                clips_to_concat.append(sub)
+                    st.write(f"Verarbeite Clip {idx+1} von {total_items}: {uploaded_file.name}")
+                    
+                    with open(raw_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    temp_files.append(raw_path)
+                    temp_files.append(clean_path)
 
-            final_reel = concatenate_videoclips(clips_to_concat, method="compose")
-            final_reel.write_videofile(
-                output_path, 
-                codec="libx264", 
-                audio_codec="aac", 
-                fps=30, 
-                preset="medium", 
-                threads=4
-            )
+                    cap = cv2.VideoCapture(raw_path)
+                    fps = cap.get(cv2.CAP_PROP_FPS)
+                    if fps <= 0 or fps > 120:
+                        fps = 30.0
+                    
+                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    dur = frame_count / fps if fps > 0 else 0
 
-            for c in clips_to_concat:
-                c.close()
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    out = cv2.VideoWriter(clean_path, fourcc, fps, (width, height))
 
-            st.success("✅ Fertig! Das Reel wurde erfolgreich generiert.")
+                    while cap.isOpened():
+                        ret, frame = cap.read()
+                        if not ret:
+                            break
+                        out.write(frame)
+                    
+                    cap.release()
+                    out.release()
+
+                    if dur <= 0:
+                        temp_check = VideoFileClip(clean_path)
+                        dur = temp_check.duration
+                        temp_check.close()
+
+                    if dur > (subclip_duration + 5):
+                        max_start = dur - subclip_duration
+                        start = min(max_start, (idx * 4.0) % max_start) if max_start > 0 else 0.0
+                    else:
+                        start = 0.0
+
+                    end = min(start + subclip_duration, dur)
+                    
+                    clip = VideoFileClip(clean_path)
+                    
+                    if hasattr(clip, "subclipped"):
+                        sub = clip.subclipped(start, end)
+                    else:
+                        sub = clip.subclip(start, end)
+                        
+                    clips_to_concat.append(sub)
+
+                st.write("Füge Clips zusammen und rendere das finale Video...")
+                final_reel = concatenate_videoclips(clips_to_concat, method="compose")
+                final_reel.write_videofile(
+                    output_path, 
+                    codec="libx264", 
+                    audio_codec="aac", 
+                    fps=30, 
+                    preset="medium", 
+                    threads=4
+                )
+
+                for c in clips_to_concat:
+                    c.close()
+
+                status.update(label="✅ Fertig! Das Reel wurde erfolgreich generiert.", state="complete", expanded=False)
             
+            st.success("🎉 Dein Reel ist bereit zum Download oder Anschauen!")
             st.video(output_path)
             
             with open(output_path, "rb") as file:
@@ -251,8 +253,12 @@ else:
                 )
 
         except Exception as e:
-            st.error(f"Fehler bei der Videoverarbeitung: {e}")
+            st.error(f"Ein Fehler ist aufgetreten: {e}")
+            st.info("Tipp: Falls das Video ein sehr exotisches Format hat, versuche es testweise mit einem klassischen .mp4-Video.")
 
         for tf in temp_files:
             if os.path.exists(tf):
-                os.remove(tf)
+                try:
+                    os.remove(tf)
+                except:
+                    pass
