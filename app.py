@@ -3,6 +3,7 @@ from openai import OpenAI
 import os
 import stripe
 import cv2
+import numpy as np
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
@@ -107,7 +108,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – alle hochgeladenen Videos werden garantiert integriert und formatiert.")
+    st.caption("Lade Clips hoch – unterschiedliche Formate werden automatisch und unverzerrt angepasst.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -126,7 +127,7 @@ else:
 
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus (alle werden garantiert verarbeitet)", 
+        "Wähle deine Videos aus (unterschiedliche Formate sind kein Problem)", 
         type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
@@ -147,7 +148,7 @@ else:
 
     user_instruction = st.text_area(
         "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Integriere alle Clips gleichmäßig mit dynamischen Momenten...",
+        placeholder="z. B. Actionreiche Clips gleichmäßig einbinden...",
         height=70
     )
 
@@ -160,7 +161,7 @@ else:
         temp_files = []
 
         try:
-            with st.status("📁 Verarbeite und integriere alle hochgeladenen Clips...", expanded=True) as status:
+            with st.status("📁 Formate werden angepasst und Clips kombiniert...", expanded=True) as status:
                 
                 if user_instruction and client:
                     try:
@@ -212,19 +213,34 @@ else:
                         if not ret:
                             break
                         
-                        resized_frame = cv2.resize(frame, (target_width, target_height))
-                        out.write(resized_frame)
+                        # --- UNVERZERRTE ANPASSUNG (Letterboxing / Padding) ---
+                        h, w = frame.shape[:2]
+                        # Skalierungsfaktor berechnen, damit das Video komplett in den Zielbereich passt
+                        scale = min(target_width / w, target_height / h)
+                        new_w = int(w * scale)
+                        new_h = int(h * scale)
+                        
+                        resized_frame = cv2.resize(frame, (new_w, new_h))
+                        
+                        # Schwarzes Canvas (Hintergrund) im Zielformat erstellen
+                        canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+                        
+                        # Video zentriert auf das Canvas setzen
+                        x_offset = (target_width - new_w) // 2
+                        y_offset = (target_height - new_h) // 2
+                        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_frame
+                        
+                        out.write(canvas)
                         frames_written += 1
                     
                     cap.release()
-                    st.write(f"✅ Video {idx+1} von {total_videos} ({uploaded_file.name}) erfolgreich integriert.")
+                    st.write(f"✅ Video {idx+1} von {total_videos} ({uploaded_file.name}) proportional angepasst & integriert.")
 
                 out.release()
-                status.update(label="✅ Fertig! Alle Videos wurden kombiniert.", state="complete", expanded=False)
+                status.update(label="✅ Fertig! Alle Videos wurden fehlerfrei formatiert.", state="complete", expanded=False)
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig!")
             
-            # Videovorschau durch Einlesen der Bytes erzwingen
             if os.path.exists(output_path):
                 with open(output_path, "rb") as vid_file:
                     video_bytes = vid_file.read()
