@@ -1,6 +1,6 @@
 streamlit
 openai
-moviepy
-pandas
-opencv-python-headless
 stripe
+opencv-python-headless
+moviepy
+numpy
