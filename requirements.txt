@@ -1,7 +1,0 @@
-streamlit
-openai
-stripe
-moviepy==1.0.3
-opencv-python
-numpy
-imageio-ffmpeg
