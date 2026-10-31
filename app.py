@@ -3,6 +3,13 @@ from openai import OpenAI
 import os
 import stripe
 import json
+import uuid
+
+# Datenbank-Funktionen importieren
+from database import init_db, check_user_is_pro
+
+# DB beim Start initialisieren
+init_db()
 
 # WICHTIG: Pillow-Patch für MoviePy-Kompatibilität (behebt den ANTIALIAS-Fehler)
 from PIL import Image
@@ -26,12 +33,6 @@ st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 # Stripe Live-Link für den Kaufen-Button
 stripe_test_link = "https://buy.stripe.com/aFa8wP6aXgCa7Zt6BubEA01"
-
-# Stripe API Key aus den Streamlit Secrets laden
-try:
-    stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
-except Exception:
-    pass
 
 # Session State für den E-Mail-Login initialisieren
 if "user_email" not in st.session_state:
@@ -78,45 +79,13 @@ if not st.session_state["user_email"]:
             clean_input = email_input.strip().lower()
             admin_emails = ["elias.krainer@icloud.com", "krainerelias@gmx.at"]
             
-            if clean_input in [e.lower() for e in admin_emails]:
+            # Blitzschneller Admin- oder Datenbank-Check (Keine langsamen Stripe-API-Loops mehr!)
+            if clean_input in [e.lower() for e in admin_emails] or check_user_is_pro(clean_input):
                 st.session_state["user_email"] = email_input
-                st.success("Erfolgreich eingeloggt! (Admin-Zugang)")
+                st.success("Erfolgreich eingeloggt! Pro-Zugang verifiziert.")
                 st.rerun()
-
-            try:
-                # Optimierte Stripe Session Abfrage mit Auto-Pagination
-                paid = False
-                has_more = True
-                starting_after = None
-                
-                while has_more and not paid:
-                    kwargs = {"limit": 100}
-                    if starting_after:
-                        kwargs["starting_after"] = starting_after
-                    sessions = stripe.checkout.Session.list(**kwargs)
-                    
-                    for session in sessions.data:
-                        s_dict = session.to_dict()
-                        customer_email = s_dict.get("customer_details", {}).get("email") or s_dict.get("customer_email")
-                        if customer_email and customer_email.strip().lower() == clean_input:
-                            if s_dict.get("payment_status") == "paid":
-                                paid = True
-                                break
-                    
-                    has_more = sessions.has_more
-                    if sessions.data:
-                        starting_after = sessions.data[-1].id
-                    else:
-                        break
-                
-                if paid:
-                    st.session_state["user_email"] = email_input
-                    st.success("Erfolgreich eingeloggt! Pro-Zugang verifiziert.")
-                    st.rerun()
-                else:
-                    st.error("Kein aktiver Kauf für diese E-Mail-Adresse bei Stripe gefunden.")
-            except Exception as e:
-                st.error(f"Fehler bei der Stripe-Verifizierung: {e}")
+            else:
+                st.error("Kein aktiver Kauf für diese E-Mail-Adresse gefunden. (Falls du gerade erst bezahlt hast, warte 1-2 Minuten, bis der Webhook verarbeitet wurde).")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("💎 VeloCut Pro")
@@ -184,15 +153,16 @@ else:
         try:
             with st.status("📁 Analysiere Videos mit KI und extrahiere Highlights...", expanded=True) as status:
                 
-                # Videos temporär speichern und Metadaten ermitteln
                 video_metadata = []
                 for idx, uploaded_file in enumerate(uploaded_files):
-                    video_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
+                    # UUID-Absicherung, damit sich gleichnamige Dateien nicht überschreiben
+                    unique_id = uuid.uuid4().hex
+                    video_path = os.path.join(".", f"raw_{idx}_{unique_id}_{uploaded_file.name}")
+                    
                     with open(video_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                     temp_files.append(video_path)
                     
-                    # Clip-Länge via MoviePy ermitteln
                     temp_clip = VideoFileClip(video_path)
                     duration = temp_clip.duration
                     temp_clip.close()
@@ -204,7 +174,6 @@ else:
                         "path": video_path
                     })
 
-                # Echte KI-Analyse für präzise Highlight-Zeitstempel
                 highlight_plan = []
                 if client:
                     try:
@@ -239,7 +208,6 @@ else:
                         st.warning(f"KI-Analyse-Fallback aktiv (Fehler: {e})")
                         highlight_plan = []
 
-                # Fallback, falls die KI-Antwort fehlgeschlagen ist
                 if not highlight_plan:
                     duration_per_video = target_duration / len(video_metadata)
                     for v in video_metadata:
@@ -251,7 +219,6 @@ else:
                             "end": end
                         })
 
-                # Clips ausschneiden & formatieren (9:16 Format für Reels / TikTok)
                 target_w, target_h = 720, 1280
                 
                 for item in highlight_plan:
@@ -265,7 +232,6 @@ else:
                     clip_path = video_metadata[v_idx]["path"]
                     subclip = VideoFileClip(clip_path).subclip(start_t, end_t)
                     
-                    # Auf 9:16 anpassen (Letterboxing mit schwarzem Hintergrund ohne Verzerrung)
                     w, h = subclip.size
                     scale = min(target_w / w, target_h / h)
                     subclip_resized = subclip.resize(scale)
@@ -276,7 +242,6 @@ else:
                     clips_to_concat.append(final_sub)
                     st.write(f"✨ Highlight aus Video {v_idx+1} ({start_t:.1f}s bis {end_t:.1f}s) extrahiert.")
 
-                # Alle Clips zu einem finalen Video zusammenfügen (inklusive Audio)
                 final_reel = concatenate_videoclips(clips_to_concat, method="compose")
                 final_reel.write_videofile(
                     output_path, 
@@ -287,7 +252,6 @@ else:
                     threads=4
                 )
                 
-                # Ressourcen freigeben
                 final_reel.close()
                 for c in clips_to_concat:
                     c.close()
@@ -309,7 +273,6 @@ else:
         except Exception as e:
             st.error(f"Ein Fehler ist aufgetreten: {e}")
 
-        # Ausfallsicheres Cleanup (Garantiertes Löschen temporärer Rohdaten)
         finally:
             for tf in temp_files:
                 if os.path.exists(tf):
