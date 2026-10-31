@@ -108,7 +108,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – unterschiedliche Formate werden automatisch und unverzerrt angepasst.")
+    st.caption("Lade Clips hoch – automatische Format-Anpassung und Multi-Clip-Kombination.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -127,7 +127,7 @@ else:
 
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus (unterschiedliche Formate sind kein Problem)", 
+        "Wähle deine Videos aus", 
         type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
@@ -213,19 +213,14 @@ else:
                         if not ret:
                             break
                         
-                        # --- UNVERZERRTE ANPASSUNG (Letterboxing / Padding) ---
                         h, w = frame.shape[:2]
-                        # Skalierungsfaktor berechnen, damit das Video komplett in den Zielbereich passt
                         scale = min(target_width / w, target_height / h)
                         new_w = int(w * scale)
                         new_h = int(h * scale)
                         
                         resized_frame = cv2.resize(frame, (new_w, new_h))
-                        
-                        # Schwarzes Canvas (Hintergrund) im Zielformat erstellen
                         canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
                         
-                        # Video zentriert auf das Canvas setzen
                         x_offset = (target_width - new_w) // 2
                         y_offset = (target_height - new_h) // 2
                         canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_frame
@@ -241,10 +236,10 @@ else:
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig!")
             
+            # Zuverlässige Videovorschau im Browser über die Datei-URL/Bytes mit explizitem Einlesen
             if os.path.exists(output_path):
                 with open(output_path, "rb") as vid_file:
-                    video_bytes = vid_file.read()
-                    st.video(video_bytes, format="video/mp4", start_time=0)
+                    st.video(vid_file.read())
             
             with open(output_path, "rb") as file:
                 st.download_button(
