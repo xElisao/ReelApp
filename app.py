@@ -186,12 +186,10 @@ else:
                     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
                     out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
 
-                # WICHTIG: Die Ziel-Zeit wird exakt durch die Anzahl der hochgeladenen Videos geteilt, 
-                # sodass JEDES EINZELNE Video garantiert seinen Auftritt bekommt!
                 total_videos = len(uploaded_files)
                 target_frames_per_video = int((target_duration * fps) / total_videos)
                 if target_frames_per_video < int(fps * 1.0):
-                    target_frames_per_video = int(fps * 1.0) # Mindestens 1 Sekunde pro Video
+                    target_frames_per_video = int(fps * 1.0)
 
                 for idx, uploaded_file in enumerate(uploaded_files):
                     video_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
@@ -204,7 +202,7 @@ else:
                     
                     start_frame = 0
                     if total_frames > target_frames_per_video:
-                        start_frame = int(total_frames * 0.1) # Startet kurz nach dem Anfang für spannendere Szenen
+                        start_frame = int(total_frames * 0.1)
 
                     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                     
@@ -226,10 +224,11 @@ else:
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig!")
             
+            # Videovorschau durch Einlesen der Bytes erzwingen
             if os.path.exists(output_path):
                 with open(output_path, "rb") as vid_file:
                     video_bytes = vid_file.read()
-                    st.video(video_bytes)
+                    st.video(video_bytes, format="video/mp4", start_time=0)
             
             with open(output_path, "rb") as file:
                 st.download_button(
