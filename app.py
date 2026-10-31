@@ -2,8 +2,8 @@ import streamlit as st
 from openai import OpenAI
 import os
 import stripe
-import cv2
-import numpy as np
+import json
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
@@ -44,13 +44,13 @@ if not st.session_state["user_email"]:
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("⚡ **Blitzschnell**")
-        st.write("Automatischer Schnitt in wenigen Sekunden.")
+        st.write("Automatischer KI-Schnitt in Sekunden.")
     with col2:
         st.markdown("🎯 **Intelligent**")
-        st.write("Zieht die besten Passagen aus deinen Clips.")
+        st.write("Erkennt die besten Passagen & Timestamps.")
     with col3:
         st.markdown("🚀 **Ready to Post**")
-        st.write("Perfekt für Reels, Shorts & TikToks.")
+        st.write("Perfekt für Reels, Shorts & TikToks mit Sound.")
         
     st.markdown("---")
     
@@ -78,16 +78,30 @@ if not st.session_state["user_email"]:
                 st.rerun()
 
             try:
-                sessions = stripe.checkout.Session.list(limit=100)
+                # Optimierte Stripe Session Abfrage mit Auto-Pagination
                 paid = False
+                has_more = True
+                starting_after = None
                 
-                for session in sessions.data:
-                    s_dict = session.to_dict()
-                    customer_email = s_dict.get("customer_details", {}).get("email") or s_dict.get("customer_email")
-                    if customer_email and customer_email.strip().lower() == clean_input:
-                        if s_dict.get("payment_status") == "paid":
-                            paid = True
-                            break
+                while has_more and not paid:
+                    kwargs = {"limit": 100}
+                    if starting_after:
+                        kwargs["starting_after"] = starting_after
+                    sessions = stripe.checkout.Session.list(**kwargs)
+                    
+                    for session in sessions.data:
+                        s_dict = session.to_dict()
+                        customer_email = s_dict.get("customer_details", {}).get("email") or s_dict.get("customer_email")
+                        if customer_email and customer_email.strip().lower() == clean_input:
+                            if s_dict.get("payment_status") == "paid":
+                                paid = True
+                                break
+                    
+                    has_more = sessions.has_more
+                    if sessions.data:
+                        starting_after = sessions.data[-1].id
+                    else:
+                        break
                 
                 if paid:
                     st.session_state["user_email"] = email_input
@@ -108,7 +122,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – die App extrahiert intelligente Highlights über die gesamte Länge passend zur Nische.")
+    st.caption("Lade Clips hoch – die KI analysiert und schneidet das perfekte Highlight-Reel inkl. Audio.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -148,7 +162,7 @@ else:
 
     user_instruction = st.text_area(
         "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Extrahiere die actionreichsten Passagen über die gesamte Länge...",
+        placeholder="z. B. Konzentriere dich auf die schnellen Kurvenfahrten und Vollgas-Passagen...",
         height=70
     )
 
@@ -159,102 +173,122 @@ else:
         
         output_path = os.path.join(".", "final_dynamic_reel.mp4")
         temp_files = []
+        clips_to_concat = []
 
         try:
-            with st.status("📁 Analysiere Videos und extrahiere intelligente Highlights...", expanded=True) as status:
+            with st.status("📁 Analysiere Videos mit KI und extrahiere Highlights...", expanded=True) as status:
                 
-                # KI-Regieanweisung passend zur Nische
-                if user_instruction and client:
-                    try:
-                        ai_response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=[
-                                {"role": "system", "content": "Du bist ein professioneller Regieassistent für Videoschnitt. Kommentiere kurz auf Deutsch, wie für die gewählte Nische die besten Momente aus den Videos über die Gesamtlänge kombiniert werden."},
-                                {"role": "user", "content": f"Nische: {content_niche}, Anweisung: {user_instruction}"}
-                            ]
-                        )
-                        st.write(f"🤖 KI-Regie: {ai_response.choices[0].message.content}")
-                    except Exception:
-                        pass
-
-                target_width = 720
-                target_height = 1280
-                fps = 30.0
-
-                fourcc = cv2.VideoWriter_fourcc(*'avc1')
-                out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
-                
-                if not out.isOpened():
-                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                    out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
-
-                total_videos = len(uploaded_files)
-                # Gesamt-Frames für das Ziel-Reel
-                total_target_frames = int(target_duration * fps)
-                
-                # Wir berechnen, wie viele Frames jedes Video beitragen darf
-                frames_per_video = total_target_frames // total_videos
-
+                # Videos temporär speichern und Metadaten ermitteln
+                video_metadata = []
                 for idx, uploaded_file in enumerate(uploaded_files):
                     video_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
                     with open(video_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                     temp_files.append(video_path)
+                    
+                    # Clip-Länge via MoviePy ermitteln
+                    temp_clip = VideoFileClip(video_path)
+                    duration = temp_clip.duration
+                    temp_clip.close()
+                    
+                    video_metadata.append({
+                        "index": idx,
+                        "name": uploaded_file.name,
+                        "duration": duration,
+                        "path": video_path
+                    })
 
-                    cap = cv2.VideoCapture(video_path)
-                    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-                    
-                    # INTELLIGENTE HIGHLIGHT-VERTEILUNG:
-                    # Statt nur am Start zu hängen, teilen wir das Video in 3 Bereiche auf 
-                    # (z.B. Start-Drittel, Mitte, Schluss-Drittel) und nehmen daraus knackige Mini-Clips!
-                    chunk_size = frames_per_video // 3 if frames_per_video >= 90 else frames_per_video
-                    num_chunks = 3 if frames_per_video >= 90 else 1
-                    
-                    frames_written_for_this_video = 0
-                    
-                    for chunk_idx in range(num_chunks):
-                        if frames_written_for_this_video >= frames_per_video:
-                            break
-                            
-                        # Setze Startpunkte über das ganze Video verteilt (z.B. bei 20%, 50%, 75% des Clips)
-                        if num_chunks == 3:
-                            fractions = [0.2, 0.5, 0.75]
-                            start_frame = int(total_frames * fractions[chunk_idx])
-                        else:
-                            start_frame = int(total_frames * 0.15) # Fallback bei sehr kurzen Clips
-                            
-                        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, start_frame))
+                # Echte KI-Analyse für präzise Highlight-Zeitstempel
+                highlight_plan = []
+                if client:
+                    try:
+                        st.write("🤖 KI-Regie analysiert Videolängen und Nische...")
+                        prompt_content = f"""
+                        Du bist ein professioneller Video-Editor. Gegeben sind {len(video_metadata)} Videos mit folgenden Gesamtlängen in Sekunden:
+                        {[f"Video {v['index']}: {v['name']} ({v['duration']:.1f}s)" for v in video_metadata]}
                         
-                        chunk_frames_target = chunk_size
-                        chunk_frames_written = 0
+                        Ziel-Gesamtlänge des finalen Reels: {target_duration} Sekunden.
+                        Content-Nische: {content_niche}
+                        Zusätzlicher Regie-Wunsch: {user_instruction if user_instruction else 'Keiner'}
                         
-                        while cap.isOpened() and chunk_frames_written < chunk_frames_target and frames_written_for_this_video < frames_per_video:
-                            ret, frame = cap.read()
-                            if not ret:
-                                break
-                            
-                            # Format anpassen (Letterboxing ohne Verzerrung)
-                            h, w = frame.shape[:2]
-                            scale = min(target_width / w, target_height / h)
-                            new_w = int(w * scale)
-                            new_h = int(h * scale)
-                            
-                            resized_frame = cv2.resize(frame, (new_w, new_h))
-                            canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
-                            
-                            x_offset = (target_width - new_w) // 2
-                            y_offset = (target_height - new_h) // 2
-                            canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_frame
-                            
-                            out.write(canvas)
-                            chunk_frames_written += 1
-                            frames_written_for_this_video += 1
-                    
-                    cap.release()
-                    st.write(f"✨ Highlights aus Video {idx+1} ({uploaded_file.name}) intelligent über die Gesamtlänge extrahiert.")
+                        Erstelle einen Schnittplan als reines JSON-Array. Wähle für jedes Video sinnvolle Start- und End-Zeitstempel (in Sekunden), sodass die Summe aller Clips exakt ca. {target_duration} Sekunden ergibt.
+                        Format (striktes JSON, kein Markdown drumherum):
+                        [
+                          {{"video_index": 0, "start": 2.0, "end": 7.0}},
+                          {{"video_index": 1, "start": 5.5, "end": 12.0}}
+                        ]
+                        """
+                        ai_response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                {"role": "system", "content": "Du gibst ausschließlich valides JSON zurück."},
+                                {"role": "user", "content": prompt_content}
+                            ]
+                        )
+                        raw_json = ai_response.choices[0].message.content.strip()
+                        if raw_json.startswith("```json"):
+                            raw_json = raw_json[7:-3].strip()
+                        highlight_plan = json.loads(raw_json)
+                    except Exception as e:
+                        st.warning(f"KI-Analyse-Fallback aktiv (Fehler: {e})")
+                        highlight_plan = []
 
-                out.release()
-                status.update(label="✅ Fertig! Die besten Passagen wurden optimal kombiniert.", state="complete", expanded=False)
+                # Fallback, falls die KI-Antwort fehlgeschlagen ist
+                if not highlight_plan:
+                    duration_per_video = target_duration / len(video_metadata)
+                    for v in video_metadata:
+                        start = max(0.0, (v["duration"] - duration_per_video) / 2)
+                        end = min(v["duration"], start + duration_per_video)
+                        highlight_plan.append({
+                            "video_index": v["index"],
+                            "start": start,
+                            "end": end
+                        })
+
+                # Clips ausschneiden & formatieren (9:16 Format für Reels / TikTok)
+                target_w, target_h = 720, 1280
+                
+                for item in highlight_plan:
+                    v_idx = item["video_index"]
+                    start_t = max(0.0, item["start"])
+                    end_t = min(video_metadata[v_idx]["duration"], item["end"])
+                    
+                    if start_t >= end_t:
+                        end_t = min(video_metadata[v_idx]["duration"], start_t + 3.0)
+
+                    clip_path = video_metadata[v_idx]["path"]
+                    subclip = VideoFileClip(clip_path).subclip(start_t, end_t)
+                    
+                    # Auf 9:16 anpassen (Letterboxing mit schwarzem Hintergrund ohne Verzerrung)
+                    w, h = subclip.size
+                    scale = min(target_w / w, target_h / h)
+                    subclip_resized = subclip.resize(scale)
+                    
+                    # Zentrieren auf 720x1280 Canvas
+                    from moviepy.editor import CompositeVideoClip, ColorClip
+                    bg = ColorClip(size=(target_w, target_h), color=(0, 0, 0)).set_duration(subclip.duration)
+                    final_sub = CompositeVideoClip([bg, subclip_resized.set_position("center")])
+                    
+                    clips_to_concat.append(final_sub)
+                    st.write(f"✨ Highlight aus Video {v_idx+1} ({start_t:.1f}s bis {end_t:.1f}s) extrahiert.")
+
+                # Alle Clips zu einem finalen Video zusammenfügen (inklusive Audio)
+                final_reel = concatenate_videoclips(clips_to_concat, method="compose")
+                final_reel.write_videofile(
+                    output_path, 
+                    fps=30, 
+                    codec="libx264", 
+                    audio_codec="aac", 
+                    preset="medium",
+                    threads=4
+                )
+                
+                # Ressourcen freigeben
+                final_reel.close()
+                for c in clips_to_concat:
+                    c.close()
+
+                status.update(label="✅ Fertig! Das Highlight-Reel mit Sound wurde erfolgreich erstellt.", state="complete", expanded=False)
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig und bereit zum Download!")
             
@@ -271,9 +305,11 @@ else:
         except Exception as e:
             st.error(f"Ein Fehler ist aufgetreten: {e}")
 
-        for tf in temp_files:
-            if os.path.exists(tf):
-                try:
-                    os.remove(tf)
-                except:
-                    pass
+        # Ausfallsicheres Cleanup (Garantiertes Löschen temporärer Rohdaten)
+        finally:
+            for tf in temp_files:
+                if os.path.exists(tf):
+                    try:
+                        os.remove(tf)
+                    except:
+                        pass
