@@ -234,20 +234,18 @@ else:
                 out.release()
                 status.update(label="✅ Fertig! Alle Videos wurden fehlerfrei formatiert.", state="complete", expanded=False)
             
-            st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig!")
+            st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig und bereit zum Download!")
             
-            # Zuverlässige Videovorschau im Browser über die Datei-URL/Bytes mit explizitem Einlesen
+            # Direkter Download-Button (ohne fehlerhafte Browser-Vorschau)
             if os.path.exists(output_path):
-                with open(output_path, "rb") as vid_file:
-                    st.video(vid_file.read())
-            
-            with open(output_path, "rb") as file:
-                st.download_button(
-                    label="📥 Dynamisches Reel herunterladen (.mp4)",
-                    data=file,
-                    file_name="dynamic_creator_reel.mp4",
-                    mime="video/mp4"
-                )
+                with open(output_path, "rb") as file:
+                    st.download_button(
+                        label="📥 Dynamisches Reel herunterladen (.mp4)",
+                        data=file,
+                        file_name="dynamic_creator_reel.mp4",
+                        mime="video/mp4",
+                        use_container_width=True
+                    )
 
         except Exception as e:
             st.error(f"Ein Fehler ist aufgetreten: {e}")
