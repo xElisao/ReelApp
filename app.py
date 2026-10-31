@@ -216,8 +216,13 @@ else:
                 end = min(start + subclip_duration, dur)
                 
                 clip = VideoFileClip(clean_path)
-                # Verwende hier das stabile .subclip() statt .subclipped()
-                sub = clip.subclip(start, end)
+                
+                # Automatische Erkennung, welche MoviePy-Methode verfügbar ist
+                if hasattr(clip, "subclipped"):
+                    sub = clip.subclipped(start, end)
+                else:
+                    sub = clip.subclip(start, end)
+                    
                 clips_to_concat.append(sub)
 
             final_reel = concatenate_videoclips(clips_to_concat, method="compose")
