@@ -1,6 +1,7 @@
 streamlit
 openai
 stripe
-opencv-python-headless
 moviepy
+opencv-python
 numpy
+imageio-ffmpeg
