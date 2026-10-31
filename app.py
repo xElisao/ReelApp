@@ -163,12 +163,13 @@ else:
         try:
             with st.status("📁 Formate werden angepasst und Clips kombiniert...", expanded=True) as status:
                 
+                # Streng definierter System-Prompt: Nur Videoschnitt, absolut kein Wort über Musik oder Suche
                 if user_instruction and client:
                     try:
                         ai_response = client.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=[
-                                {"role": "system", "content": "Du bist ein Regieassistent für Videoschnitt."},
+                                {"role": "system", "content": "Du bist ein professioneller Regieassistent für reinen Videoschnitt. Kommentiere kurz auf Deutsch, wie die visuellen Clips optimal zusammengeschnitten werden. Erwähne niemals Musik, Audio oder Töne."},
                                 {"role": "user", "content": f"Nische: {content_niche}, Anweisung: {user_instruction}"}
                             ]
                         )
@@ -236,7 +237,6 @@ else:
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig und bereit zum Download!")
             
-            # Direkter Download-Button (ohne fehlerhafte Browser-Vorschau)
             if os.path.exists(output_path):
                 with open(output_path, "rb") as file:
                     st.download_button(
