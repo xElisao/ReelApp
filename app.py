@@ -107,7 +107,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – die App kombiniert sie intelligent nach deinen Vorgaben zu einem Highlight-Reel.")
+    st.caption("Lade Clips hoch – alle hochgeladenen Videos werden garantiert integriert und formatiert.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -126,7 +126,7 @@ else:
 
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus", 
+        "Wähle deine Videos aus (alle werden garantiert verarbeitet)", 
         type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
@@ -147,7 +147,7 @@ else:
 
     user_instruction = st.text_area(
         "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Konzentriere dich auf die actionreichsten Szenen und schnellen Passagen...",
+        placeholder="z. B. Integriere alle Clips gleichmäßig mit dynamischen Momenten...",
         height=70
     )
 
@@ -160,15 +160,14 @@ else:
         temp_files = []
 
         try:
-            with st.status("📁 Verarbeite und kombiniere alle Clips...", expanded=True) as status:
+            with st.status("📁 Verarbeite und integriere alle hochgeladenen Clips...", expanded=True) as status:
                 
-                # OpenAI Prompt-Analyse (falls angegeben und Client vorhanden)
                 if user_instruction and client:
                     try:
                         ai_response = client.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=[
-                                {"role": "system", "content": "Du bist ein Regieassistent für Videoschnitt. Antworte in einem kurzen Satz, wie du den Schnitt für das Reel optimierst."},
+                                {"role": "system", "content": "Du bist ein Regieassistent für Videoschnitt."},
                                 {"role": "user", "content": f"Nische: {content_niche}, Anweisung: {user_instruction}"}
                             ]
                         )
@@ -176,41 +175,36 @@ else:
                     except Exception:
                         pass
 
-                # Basis-Eigenschaften vom ersten Video holen
-                first_raw_path = os.path.join(".", f"raw_0_{uploaded_files[0].name}")
-                with open(first_raw_path, "wb") as f:
-                    f.write(uploaded_files[0].getbuffer())
-                temp_files.append(first_raw_path)
+                target_width = 720
+                target_height = 1280
+                fps = 30.0
 
-                cap_test = cv2.VideoCapture(first_raw_path)
-                fps = cap_test.get(cv2.CAP_PROP_FPS)
-                if fps <= 0 or fps > 120:
-                    fps = 30.0
-                width = int(cap_test.get(cv2.CAP_PROP_FRAME_WIDTH))
-                height = int(cap_test.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                cap_test.release()
+                fourcc = cv2.VideoWriter_fourcc(*'avc1')
+                out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
+                
+                if not out.isOpened():
+                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                    out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
 
-                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-
-                # Berechne, wie viele Frames jedes Video beitragen soll (gleichmäßig aufgeteilt)
+                # WICHTIG: Die Ziel-Zeit wird exakt durch die Anzahl der hochgeladenen Videos geteilt, 
+                # sodass JEDES EINZELNE Video garantiert seinen Auftritt bekommt!
                 total_videos = len(uploaded_files)
                 target_frames_per_video = int((target_duration * fps) / total_videos)
+                if target_frames_per_video < int(fps * 1.0):
+                    target_frames_per_video = int(fps * 1.0) # Mindestens 1 Sekunde pro Video
 
                 for idx, uploaded_file in enumerate(uploaded_files):
                     video_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
-                    if idx > 0:
-                        with open(video_path, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
+                    with open(video_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
                     temp_files.append(video_path)
 
                     cap = cv2.VideoCapture(video_path)
                     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     
-                    # Wähle einen dynamischen Startpunkt (z.B. nach den ersten ruhigen Sekunden)
                     start_frame = 0
                     if total_frames > target_frames_per_video:
-                        start_frame = int(total_frames * 0.15) # Startet bei 15% des Clips für spannendere Momente
+                        start_frame = int(total_frames * 0.1) # Startet kurz nach dem Anfang für spannendere Szenen
 
                     cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
                     
@@ -220,20 +214,22 @@ else:
                         if not ret:
                             break
                         
-                        if frame.shape[1] != width or frame.shape[0] != height:
-                            frame = cv2.resize(frame, (width, height))
-                            
-                        out.write(frame)
+                        resized_frame = cv2.resize(frame, (target_width, target_height))
+                        out.write(resized_frame)
                         frames_written += 1
                     
                     cap.release()
-                    st.write(f"✨ Highlight aus Clip {idx+1} ({uploaded_file.name}) extrahiert.")
+                    st.write(f"✅ Video {idx+1} von {total_videos} ({uploaded_file.name}) erfolgreich integriert.")
 
                 out.release()
-                status.update(label="✅ Fertig! Das Highlight-Reel aus allen Videos wurde generiert.", state="complete", expanded=False)
+                status.update(label="✅ Fertig! Alle Videos wurden kombiniert.", state="complete", expanded=False)
             
-            st.success("🎉 Dein Multi-Clip Highlight-Reel ist bereit!")
-            st.video(output_path)
+            st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig!")
+            
+            if os.path.exists(output_path):
+                with open(output_path, "rb") as vid_file:
+                    video_bytes = vid_file.read()
+                    st.video(video_bytes)
             
             with open(output_path, "rb") as file:
                 st.download_button(
