@@ -3,7 +3,13 @@ from openai import OpenAI
 import os
 import stripe
 import json
-from moviepy.editor import VideoFileClip, concatenate_videoclips
+
+# WICHTIG: Pillow-Patch für MoviePy-Kompatibilität (behebt den ANTIALIAS-Fehler)
+from PIL import Image
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+
+from moviepy.editor import VideoFileClip, concatenate_videoclips, CompositeVideoClip, ColorClip
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
@@ -162,7 +168,7 @@ else:
 
     user_instruction = st.text_area(
         "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Konzentriere dich auf die schnellen Kurvenfahrten und Vollgas-Passagen...",
+        placeholder="z. B. Konzentriere dich auf die schnellen Passagen und Vollgas-Momente...",
         height=70
     )
 
@@ -264,8 +270,6 @@ else:
                     scale = min(target_w / w, target_h / h)
                     subclip_resized = subclip.resize(scale)
                     
-                    # Zentrieren auf 720x1280 Canvas
-                    from moviepy.editor import CompositeVideoClip, ColorClip
                     bg = ColorClip(size=(target_w, target_h), color=(0, 0, 0)).set_duration(subclip.duration)
                     final_sub = CompositeVideoClip([bg, subclip_resized.set_position("center")])
                     
