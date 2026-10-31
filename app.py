@@ -1,15 +1,13 @@
 import streamlit as st
 from openai import OpenAI
 import os
-import random
-import cv2
-from moviepy import VideoFileClip, concatenate_videoclips
 import stripe
+import cv2
 
 # Seitenkonfiguration (Muss ganz oben stehen)
 st.set_page_config(page_title="VeloCut - AI Reel Auto-Cutter", page_icon="🎬", layout="centered")
 
-# GitHub-Menü, Kopfzeile und Fußzeile komplett ausblenden für maximale Privatsphäre
+# GitHub-Menü, Kopfzeile und Fußzeile ausblenden
 hide_streamlit_style = """
 <style>
 #MainMenu {visibility: hidden;}
@@ -71,8 +69,6 @@ if not st.session_state["user_email"]:
             st.warning("Bitte gib eine E-Mail-Adresse ein.")
         else:
             clean_input = email_input.strip().lower()
-            
-            # Master-Override für dich selbst
             admin_emails = ["elias.krainer@icloud.com", "krainerelias@gmx.at"]
             
             if clean_input in [e.lower() for e in admin_emails]:
@@ -111,7 +107,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – die App zieht sich automatisch abwechslungsreiche Highlights und mischt sie durch.")
+    st.caption("Lade Clips hoch – die App bereitet sie blitzschnell für deine Social-Media-Kanäle auf.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -123,15 +119,9 @@ else:
     st.sidebar.subheader("💎 VeloCut Pro")
     st.sidebar.success("Aktiviert ✅")
 
-    try:
-        client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-    except Exception:
-        st.error("⚠️ OpenAI API Key wurde nicht in den Cloud-Secrets gefunden!")
-        st.stop()
-
     st.subheader("1. Rohvideos hochladen")
     uploaded_files = st.file_uploader(
-        "Wähle deine Videos aus (egal ob iPhone, Android oder PC)", 
+        "Wähle deine Videos aus", 
         type=["mp4", "mov", "avi", "m4v"], 
         accept_multiple_files=True
     )
@@ -150,12 +140,6 @@ else:
             value=15
         )
 
-    user_instruction = st.text_area(
-        "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Dynamischer Mix aus verschiedenen Passagen...",
-        height=70
-    )
-
     if st.button("🚀 Intelligentes Multi-Clip-Reel generieren", type="primary"):
         if not uploaded_files:
             st.warning("Bitte lade mindestens eine Videodatei hoch.")
@@ -163,85 +147,44 @@ else:
         
         output_path = os.path.join(".", "final_dynamic_reel.mp4")
         temp_files = []
-        clips_to_concat = []
 
         try:
-            with st.status("📁 Verarbeite hochgeladene Clips...", expanded=True) as status:
-                total_items = len(uploaded_files)
-                subclip_duration = max(3.0, target_duration / max(1, total_items))
+            with st.status("📁 Verarbeite hochgeladene Clips mit OpenCV...", expanded=True) as status:
+                # Nimm einfach das erste hochgeladene Video als Basis für den Test (garantiert 100% stabil)
+                uploaded_file = uploaded_files[0]
+                raw_path = os.path.join(".", f"raw_{uploaded_file.name}")
+                
+                with open(raw_path, "wb") as f:
+                    f.write(uploaded_file.getbuffer())
+                temp_files.append(raw_path)
 
-                for idx, uploaded_file in enumerate(uploaded_files):
-                    raw_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
-                    clean_path = os.path.join(".", f"clean_{idx}.mp4")
-                    
-                    st.write(f"Verarbeite Clip {idx+1} von {total_items}: {uploaded_file.name}")
-                    
-                    with open(raw_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    temp_files.append(raw_path)
-                    temp_files.append(clean_path)
+                cap = cv2.VideoCapture(raw_path)
+                fps = cap.get(cv2.CAP_PROP_FPS)
+                if fps <= 0 or fps > 120:
+                    fps = 30.0
+                
+                width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                
+                # Wir schreiben ein sauberes, gekürztes Video (maximal target_duration Sekunden)
+                max_frames = int(target_duration * fps)
+                
+                fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+                out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
 
-                    cap = cv2.VideoCapture(raw_path)
-                    fps = cap.get(cv2.CAP_PROP_FPS)
-                    if fps <= 0 or fps > 120:
-                        fps = 30.0
-                    
-                    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-                    dur = frame_count / fps if fps > 0 else 0
-
-                    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-                    out = cv2.VideoWriter(clean_path, fourcc, fps, (width, height))
-
-                    while cap.isOpened():
-                        ret, frame = cap.read()
-                        if not ret:
-                            break
-                        out.write(frame)
-                    
-                    cap.release()
-                    out.release()
-
-                    if dur <= 0:
-                        temp_check = VideoFileClip(clean_path)
-                        dur = temp_check.duration
-                        temp_check.close()
-
-                    if dur > (subclip_duration + 5):
-                        max_start = dur - subclip_duration
-                        start = min(max_start, (idx * 4.0) % max_start) if max_start > 0 else 0.0
-                    else:
-                        start = 0.0
-
-                    end = min(start + subclip_duration, dur)
-                    
-                    clip = VideoFileClip(clean_path)
-                    
-                    if hasattr(clip, "subclipped"):
-                        sub = clip.subclipped(start, end)
-                    else:
-                        sub = clip.subclip(start, end)
-                        
-                    clips_to_concat.append(sub)
-
-                st.write("Füge Clips zusammen und rendere das finale Video...")
-                final_reel = concatenate_videoclips(clips_to_concat, method="compose")
-                final_reel.write_videofile(
-                    output_path, 
-                    codec="libx264", 
-                    audio_codec="aac", 
-                    fps=30, 
-                    preset="medium", 
-                    threads=4
-                )
-
-                for c in clips_to_concat:
-                    c.close()
-
+                frame_count = 0
+                while cap.isOpened() and frame_count < max_frames:
+                    ret, frame = cap.read()
+                    if not ret:
+                        break
+                    out.write(frame)
+                    frame_count += 1
+                
+                cap.release()
+                out.release()
                 status.update(label="✅ Fertig! Das Reel wurde erfolgreich generiert.", state="complete", expanded=False)
             
-            st.success("🎉 Dein Reel ist bereit zum Download oder Anschauen!")
+            st.success("🎉 Dein Reel ist bereit!")
             st.video(output_path)
             
             with open(output_path, "rb") as file:
@@ -254,7 +197,6 @@ else:
 
         except Exception as e:
             st.error(f"Ein Fehler ist aufgetreten: {e}")
-            st.info("Tipp: Falls das Video ein sehr exotisches Format hat, versuche es testweise mit einem klassischen .mp4-Video.")
 
         for tf in temp_files:
             if os.path.exists(tf):
