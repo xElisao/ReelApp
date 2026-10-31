@@ -72,7 +72,7 @@ if not st.session_state["user_email"]:
         else:
             clean_input = email_input.strip().lower()
             
-            # Master-Override für dich selbst (optional, falls du dich immer einloggen willst)
+            # Master-Override für dich selbst
             admin_emails = ["elias.krainer@icloud.com", "krainerelias@gmx.at"]
             
             if clean_input in [e.lower() for e in admin_emails]:
@@ -81,7 +81,6 @@ if not st.session_state["user_email"]:
                 st.rerun()
 
             try:
-                # Direkte Abfrage bei Stripe, ob die E-Mail bezahlt hat
                 sessions = stripe.checkout.Session.list(limit=100)
                 paid = False
                 
@@ -98,7 +97,7 @@ if not st.session_state["user_email"]:
                     st.success("Erfolgreich eingeloggt! Pro-Zugang verifiziert.")
                     st.rerun()
                 else:
-                    st.error("Kein aktiver Kauf für diese E-Mail-Adresse bei Stripe gefunden. (Falls du gerade erst bezahlt hast, versuche es in wenigen Sekunden noch einmal).")
+                    st.error("Kein aktiver Kauf für diese E-Mail-Adresse bei Stripe gefunden.")
             except Exception as e:
                 st.error(f"Fehler bei der Stripe-Verifizierung: {e}")
 
@@ -217,7 +216,8 @@ else:
                 end = min(start + subclip_duration, dur)
                 
                 clip = VideoFileClip(clean_path)
-                sub = clip.subclipped(start, end)
+                # Verwende hier das stabile .subclip() statt .subclipped()
+                sub = clip.subclip(start, end)
                 clips_to_concat.append(sub)
 
             final_reel = concatenate_videoclips(clips_to_concat, method="compose")
