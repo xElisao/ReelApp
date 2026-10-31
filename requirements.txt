@@ -1,7 +1,7 @@
 streamlit
 openai
 stripe
-moviepy
+moviepy==1.0.3
 opencv-python
 numpy
 imageio-ffmpeg
