@@ -140,6 +140,13 @@ else:
             value=15
         )
 
+    # Hier ist die Prompt-Eingabe wieder zurück!
+    user_instruction = st.text_area(
+        "Schnitt-Anweisungen (optional)",
+        placeholder="z. B. Dynamischer Mix aus schnellen Passagen...",
+        height=70
+    )
+
     if st.button("🚀 Intelligentes Multi-Clip-Reel generieren", type="primary"):
         if not uploaded_files:
             st.warning("Bitte lade mindestens eine Videodatei hoch.")
@@ -149,8 +156,7 @@ else:
         temp_files = []
 
         try:
-            with st.status("📁 Verarbeite hochgeladene Clips mit OpenCV...", expanded=True) as status:
-                # Nimm einfach das erste hochgeladene Video als Basis für den Test (garantiert 100% stabil)
+            with st.status("📁 Verarbeite hochgeladene Clips...", expanded=True) as status:
                 uploaded_file = uploaded_files[0]
                 raw_path = os.path.join(".", f"raw_{uploaded_file.name}")
                 
@@ -166,7 +172,6 @@ else:
                 width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                 height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                 
-                # Wir schreiben ein sauberes, gekürztes Video (maximal target_duration Sekunden)
                 max_frames = int(target_duration * fps)
                 
                 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
