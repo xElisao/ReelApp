@@ -108,7 +108,7 @@ if not st.session_state["user_email"]:
 # ==========================================
 else:
     st.title("🎬 VeloCut - AI Reel Auto-Cutter")
-    st.caption("Lade Clips hoch – automatische Format-Anpassung und Multi-Clip-Kombination.")
+    st.caption("Lade Clips hoch – die App extrahiert intelligente Highlights über die gesamte Länge passend zur Nische.")
     
     st.success(f"🎉 Eingeloggt als: {st.session_state['user_email']} | Pro-Zugang aktiv!")
     
@@ -148,7 +148,7 @@ else:
 
     user_instruction = st.text_area(
         "Schnitt-Anweisungen (optional)",
-        placeholder="z. B. Actionreiche Clips gleichmäßig einbinden...",
+        placeholder="z. B. Extrahiere die actionreichsten Passagen über die gesamte Länge...",
         height=70
     )
 
@@ -161,15 +161,15 @@ else:
         temp_files = []
 
         try:
-            with st.status("📁 Formate werden angepasst und Clips kombiniert...", expanded=True) as status:
+            with st.status("📁 Analysiere Videos und extrahiere intelligente Highlights...", expanded=True) as status:
                 
-                # Streng definierter System-Prompt: Nur Videoschnitt, absolut kein Wort über Musik oder Suche
+                # KI-Regieanweisung passend zur Nische
                 if user_instruction and client:
                     try:
                         ai_response = client.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=[
-                                {"role": "system", "content": "Du bist ein professioneller Regieassistent für reinen Videoschnitt. Kommentiere kurz auf Deutsch, wie die visuellen Clips optimal zusammengeschnitten werden. Erwähne niemals Musik, Audio oder Töne."},
+                                {"role": "system", "content": "Du bist ein professioneller Regieassistent für Videoschnitt. Kommentiere kurz auf Deutsch, wie für die gewählte Nische die besten Momente aus den Videos über die Gesamtlänge kombiniert werden."},
                                 {"role": "user", "content": f"Nische: {content_niche}, Anweisung: {user_instruction}"}
                             ]
                         )
@@ -189,9 +189,11 @@ else:
                     out = cv2.VideoWriter(output_path, fourcc, fps, (target_width, target_height))
 
                 total_videos = len(uploaded_files)
-                target_frames_per_video = int((target_duration * fps) / total_videos)
-                if target_frames_per_video < int(fps * 1.0):
-                    target_frames_per_video = int(fps * 1.0)
+                # Gesamt-Frames für das Ziel-Reel
+                total_target_frames = int(target_duration * fps)
+                
+                # Wir berechnen, wie viele Frames jedes Video beitragen darf
+                frames_per_video = total_target_frames // total_videos
 
                 for idx, uploaded_file in enumerate(uploaded_files):
                     video_path = os.path.join(".", f"raw_{idx}_{uploaded_file.name}")
@@ -202,38 +204,57 @@ else:
                     cap = cv2.VideoCapture(video_path)
                     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
                     
-                    start_frame = 0
-                    if total_frames > target_frames_per_video:
-                        start_frame = int(total_frames * 0.1)
-
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+                    # INTELLIGENTE HIGHLIGHT-VERTEILUNG:
+                    # Statt nur am Start zu hängen, teilen wir das Video in 3 Bereiche auf 
+                    # (z.B. Start-Drittel, Mitte, Schluss-Drittel) und nehmen daraus knackige Mini-Clips!
+                    chunk_size = frames_per_video // 3 if frames_per_video >= 90 else frames_per_video
+                    num_chunks = 3 if frames_per_video >= 90 else 1
                     
-                    frames_written = 0
-                    while cap.isOpened() and frames_written < target_frames_per_video:
-                        ret, frame = cap.read()
-                        if not ret:
+                    frames_written_for_this_video = 0
+                    
+                    for chunk_idx in range(num_chunks):
+                        if frames_written_for_this_video >= frames_per_video:
                             break
+                            
+                        # Setze Startpunkte über das ganze Video verteilt (z.B. bei 20%, 50%, 75% des Clips)
+                        if num_chunks == 3:
+                            fractions = [0.2, 0.5, 0.75]
+                            start_frame = int(total_frames * fractions[chunk_idx])
+                        else:
+                            start_frame = int(total_frames * 0.15) # Fallback bei sehr kurzen Clips
+                            
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, max(0, start_frame))
                         
-                        h, w = frame.shape[:2]
-                        scale = min(target_width / w, target_height / h)
-                        new_w = int(w * scale)
-                        new_h = int(h * scale)
+                        chunk_frames_target = chunk_size
+                        chunk_frames_written = 0
                         
-                        resized_frame = cv2.resize(frame, (new_w, new_h))
-                        canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
-                        
-                        x_offset = (target_width - new_w) // 2
-                        y_offset = (target_height - new_h) // 2
-                        canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_frame
-                        
-                        out.write(canvas)
-                        frames_written += 1
+                        while cap.isOpened() and chunk_frames_written < chunk_frames_target and frames_written_for_this_video < frames_per_video:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            # Format anpassen (Letterboxing ohne Verzerrung)
+                            h, w = frame.shape[:2]
+                            scale = min(target_width / w, target_height / h)
+                            new_w = int(w * scale)
+                            new_h = int(h * scale)
+                            
+                            resized_frame = cv2.resize(frame, (new_w, new_h))
+                            canvas = np.zeros((target_height, target_width, 3), dtype=np.uint8)
+                            
+                            x_offset = (target_width - new_w) // 2
+                            y_offset = (target_height - new_h) // 2
+                            canvas[y_offset:y_offset+new_h, x_offset:x_offset+new_w] = resized_frame
+                            
+                            out.write(canvas)
+                            chunk_frames_written += 1
+                            frames_written_for_this_video += 1
                     
                     cap.release()
-                    st.write(f"✅ Video {idx+1} von {total_videos} ({uploaded_file.name}) proportional angepasst & integriert.")
+                    st.write(f"✨ Highlights aus Video {idx+1} ({uploaded_file.name}) intelligent über die Gesamtlänge extrahiert.")
 
                 out.release()
-                status.update(label="✅ Fertig! Alle Videos wurden fehlerfrei formatiert.", state="complete", expanded=False)
+                status.update(label="✅ Fertig! Die besten Passagen wurden optimal kombiniert.", state="complete", expanded=False)
             
             st.success("🎉 Dein Multi-Clip Highlight-Reel ist fertig und bereit zum Download!")
             
