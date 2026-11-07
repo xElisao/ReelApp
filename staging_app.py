@@ -19,7 +19,7 @@ from prototype_intent import analyze_files
 from preview_clips import PreviewError, render_report_previews
 
 
-LAB_BUILD = "Preview-Lab 1 | 2026-11-07"
+LAB_BUILD = "Diversity-Fix 1 | 2026-11-07"
 
 
 st.set_page_config(
@@ -149,6 +149,7 @@ def _remember_previews(clips, report_bytes: bytes) -> None:
             "score": clip.score,
             "summary": clip.summary,
             "mp4_bytes": clip.mp4_bytes,
+            "similar_view_as": clip.similar_view_as,
         }
         for clip in clips
     ]
@@ -375,6 +376,13 @@ if clips_to_show:
             f"{clip['start_seconds']:.2f}–{clip['end_seconds']:.2f}s)"
         )
         st.video(clip["mp4_bytes"], format="video/mp4")
+        if clip.get("similar_view_as") is not None:
+            st.info(
+                f"Vermutlich dieselbe Kameraperspektive wie Szene "
+                f"{clip['similar_view_as']}. Für ein Landschafts-Reel "
+                "könnte diese Ansicht eine Wiederholung sein. "
+                "Bei Action kann es trotzdem ein eigener guter Moment sein."
+            )
         grade = st.radio(
             f"Wie gut passt Szene {index} zu deinem Wunsch?",
             ["Noch nicht bewertet", "Gut", "Nicht gut"],
@@ -387,6 +395,7 @@ if clips_to_show:
             "end_seconds": clip["end_seconds"],
             "ai_score": clip["score"],
             "user_rating": grade,
+            "similar_view_as": clip.get("similar_view_as"),
         })
     feedback = {
         "report_sha256_prefix": preview_identifier,
