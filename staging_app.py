@@ -18,7 +18,7 @@ import streamlit as st
 from prototype_intent import analyze_files
 
 
-LAB_BUILD = "Intent-Fix 3 | 2026-11-07"
+LAB_BUILD = "Composition-Fix 1 | 2026-11-07"
 
 
 st.set_page_config(
