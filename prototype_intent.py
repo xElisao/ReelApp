@@ -17,6 +17,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 from adaptive_refinement import refine_for_goal
+from batch_frames import extract_frame_cache, select_cached_frames
 from candidate_windows import generate_candidate_windows
 from content_understanding import observe_window
 from highlight_models import CONTENT_NICHES
@@ -66,11 +67,24 @@ def analyze_files(
     if len(windows) > MAX_TOTAL_WINDOWS:
         raise ValueError("Zu viele Zeitfenster für den Prototyp. Videos kürzen.")
 
+    # Ein FFmpeg-Durchlauf pro Video statt erneuter Extraktion für jedes
+    # grobe und detaillierte Zeitfenster. Maximal 60 s x 2 FPS = ca. 120 Frames.
+    caches = {
+        item.source_id: extract_frame_cache(
+            item.path, source_id=item.source_id,
+            duration_seconds=item.duration_seconds,
+        )
+        for item in metadata
+    }
+
     # Nutzerwunsch unabhängig vom Videoinhalt interpretieren, anschließend
     # visuell prüfen. Kein Wunsch darf einen Bildbeleg ersetzen.
     goal = understand_user_goal(client, instruction, model=model)
     observations = [
-        observe_window(client, item, window, model=model)
+        observe_window(
+            client, item, window, model=model,
+            frames=select_cached_frames(caches[item.source_id], window, frame_count=3),
+        )
         for item, window in windows
     ]
     result = rank_for_goal(
@@ -85,13 +99,17 @@ def analyze_files(
             category_override=category_override,
             model=model,
             max_results=max_results,
+            frame_caches=caches,
         )
         if refine else None
     )
     output = {
-        "mode": "static_frame_visual_observations_no_audio",
+        "mode": "cached_static_frame_visual_observations_no_audio",
         "video_count": len(metadata),
         "analyzed_windows": len(windows),
+        "extracted_frame_counts": {
+            source_id: len(cache.frames) for source_id, cache in caches.items()
+        },
         "goal": asdict(goal),
         "detected_categories": list(result.detected_categories),
         "category_override": category_override,
