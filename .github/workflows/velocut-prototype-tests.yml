@@ -22,6 +22,6 @@ jobs:
         with:
           python-version: '3.11'
       - name: Compile Python modules
-        run: python -m compileall -q candidate_windows.py frame_sampler.py highlight_analyzer.py prototype_analyze.py video_probe.py highlight_models.py content_understanding.py user_goals.py intent_ranking.py prototype_intent.py adaptive_refinement.py batch_frames.py
+        run: python -m compileall -q candidate_windows.py frame_sampler.py highlight_analyzer.py prototype_analyze.py video_probe.py highlight_models.py content_understanding.py user_goals.py intent_ranking.py prototype_intent.py adaptive_refinement.py batch_frames.py evaluate_recommendations.py
       - name: Run offline unit tests
         run: python -m unittest discover -s tests -v
