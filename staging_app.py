@@ -16,11 +16,11 @@ from pathlib import Path
 import streamlit as st
 
 from prototype_intent import analyze_files
-from preview_clips import PreviewError, render_report_previews
+from preview_clips import PreviewError, pick_suggestions, render_report_previews
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Diagnostics-Fix 1 | 2026-11-07"
+LAB_BUILD = "Shot-Fix 1 | 2026-11-07"
 
 
 st.set_page_config(
@@ -216,6 +216,11 @@ def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
     result = report.get("refinement") if show_refined and "refinement" in report else None
     if result:
         st.caption(f"Detailprüfung: {result['inspected_windows']} weitere Zeitfenster")
+        if result.get("cut_crossing_windows_ignored"):
+            st.caption(
+                f"Schnittprüfung: {result['cut_crossing_windows_ignored']} "
+                "Zeitfenster mit Bildwechsel ausgelassen."
+            )
         if result.get("notice"):
             st.info(result["notice"])
         rows = result.get("suggestions", [])
@@ -305,6 +310,15 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                         state["stage"] = "Lokale Video-Vorschau"
                         try:
                             clips = render_report_previews(paths, report)
+                            expected_preview_count = min(len(pick_suggestions(report)), 3)
+                            dropped = expected_preview_count - len(clips)
+                            if dropped:
+                                st.warning(
+                                    f"{dropped} Vorschlag/Vorschläge wegen erkannter "
+                                    "harter Bildwechsel mitten im Clip ausgelassen. "
+                                    "Die vorhandenen KI-Szenenbeschreibungen werden "
+                                    "nicht eigenmächtig auf andere Zeiträume übertragen."
+                                )
                             report_bytes = json.dumps(
                                 report, sort_keys=True, ensure_ascii=False
                             ).encode("utf-8")
@@ -421,6 +435,13 @@ if st.button("🎞️ Vorschau aus gespeichertem Ergebnis erstellen", type="seco
                 with tempfile.TemporaryDirectory(prefix="velocut_preview_") as directory:
                     paths = _write_uploaded_videos(uploads, directory)
                     clips = render_report_previews(paths, report)
+                skipped = min(len(pick_suggestions(report)), 3) - len(clips)
+                if skipped:
+                    st.warning(
+                        f"{skipped} Vorschlag/Vorschläge wegen erkannter "
+                        "harter Bildwechsel mitten im Clip ausgelassen. "
+                        "Dafür wird keine neue KI-Analyse benötigt."
+                    )
                 _remember_previews(clips, report_bytes)
                 if clips:
                     st.success(
