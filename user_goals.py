@@ -224,7 +224,9 @@ def understand_user_goal(
         # ungeprüft einstuft: deren Bedeutung als weiches Ziel retten.
         # Ausschlüsse und ausdrücklich verlangte Ereignisse werden nie verändert.
         if not focus_tags and not required_tags:
-            focus_tags = _recover_obvious_visual_focus(instruction, excluded_tags)
+            focus_tags = _recover_obvious_visual_focus(
+                instruction, excluded_tags + deemphasized_tags
+            )
 
         return EditingGoal(
             original_instruction=instruction,
