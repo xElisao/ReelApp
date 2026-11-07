@@ -21,6 +21,7 @@ from frame_sampler import FrameSampleError
 from visual_diversity import (
     VisualDiversityError, fingerprint_window, likely_same_camera_view,
 )
+from shot_boundaries import ShotDetectionError, crosses_hard_cut, detect_hard_cuts
 
 
 MAX_PREVIEWS = 3
@@ -168,9 +169,23 @@ def render_report_previews(
         metadata[source_id] = item
 
     selections = pick_suggestions(report)
+    # Prüfe auch alte KI-Berichte kostenlos auf Mischclips. Ein Bericht aus
+    # vorangegangenen Versionen enthält die Schnittgrenzen noch nicht.
+    shot_cuts = {}
+    for source_id, source in metadata.items():
+        try:
+            shot_cuts[source_id] = detect_hard_cuts(
+                source.path, duration_seconds=source.duration_seconds,
+            )
+        except ShotDetectionError:
+            shot_cuts[source_id] = ()
     clips: list[PreviewClip] = []
     for item in selections[:max_previews]:
         source_id, start, end = _validate_interval(item, metadata)
+        if crosses_hard_cut(start, end, shot_cuts[source_id]):
+            # Nicht eigenmächtig trimmen: die alte Szenenbeschreibung könnte
+            # sich auf das entfernte Motiv beziehen. Sicherer: überspringen.
+            continue
         score = item.get("score")
         if score is not None and (not _number(score) or not 0 <= score <= 100):
             raise PreviewError("Ungültige Vorschau-Bewertung.")
