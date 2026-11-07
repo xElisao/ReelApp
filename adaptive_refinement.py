@@ -213,7 +213,7 @@ def refine_for_goal(
         )
     return RefinedResult(
         scenes=ranked.ranked_scenes,
-        inspected_windows=len(expanded),
+        inspected_windows=len(safe_windows),
         selected_coarse_windows=len(selected),
         inspected_all_coarse_windows=complete,
         notice=notice,
