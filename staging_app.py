@@ -17,9 +17,10 @@ import streamlit as st
 
 from prototype_intent import analyze_files
 from preview_clips import PreviewError, render_report_previews
+from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Diversity-Fix 1 | 2026-11-07"
+LAB_BUILD = "Diagnostics-Fix 1 | 2026-11-07"
 
 
 st.set_page_config(
@@ -137,6 +138,29 @@ def _write_uploaded_videos(uploaded, directory: str) -> list[Path]:
     return result
 
 
+if st.button("🔍 Video prüfen (ohne KI-Kosten)"):
+    if not uploads:
+        st.error("Bitte zuerst das neue Testvideo hochladen.")
+    else:
+        try:
+            with tempfile.TemporaryDirectory(prefix="velocut_preflight_") as directory:
+                video_paths = _write_uploaded_videos(uploads, directory)
+                infos = inspect_videos(video_paths)
+            st.success("Technische Prüfung bestanden. Noch keine KI-Analyse gestartet.")
+            for info in infos:
+                st.caption(
+                    f"{info.source_id}: {info.duration_seconds:.1f} Sekunden, "
+                    f"{info.width} × {info.height} Pixel"
+                )
+        except VideoPreflightError as exc:
+            st.error(str(exc))
+        except Exception as exc:
+            st.error(
+                "Technische Video-Prüfung fehlgeschlagen "
+                f"({type(exc).__name__}). Es wurde keine KI-Analyse gestartet."
+            )
+
+
 def _remember_previews(clips, report_bytes: bytes) -> None:
     """Keep only compressed short clips, never original uploaded videos."""
     identifier = hashlib.sha256(report_bytes).hexdigest()[:16]
@@ -231,56 +255,111 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
     elif any(item.size > 80 * 1024 * 1024 for item in uploads) or sum(item.size for item in uploads) > 160 * 1024 * 1024:
         st.error("Maximal 80 MB pro Video und 160 MB insgesamt für die Testinstanz.")
     else:
-        with st.spinner("Video-Inhalte werden analysiert – externe API-Aufrufe laufen ..."):
+        state = {"stage": "Video lokal prüfen", "api_started": False}
+
+        def record_stage(label: str) -> None:
+            state["stage"] = label
+
+        with st.spinner("Video wird geprüft und danach nur bei gültigen Daten analysiert ..."):
             try:
-                # Import erst hier: Wenn Secrets fehlen, keine API initialisieren.
                 from openai import OpenAI
 
                 preview_warning = None
                 with tempfile.TemporaryDirectory(prefix="velocut_staging_") as directory:
                     paths = _write_uploaded_videos(uploads, directory)
+
+                    # Die technischen Grenzen müssen VOR den OpenAI-Aufrufen
+                    # überprüft werden, damit keine vermeidbaren Kosten entstehen.
+                    infos = inspect_videos(paths)
+                    st.caption(
+                        "Technisch geprüft: " +
+                        ", ".join(
+                            f"{item.source_id}: {item.duration_seconds:.1f}s"
+                            for item in infos
+                        )
+                    )
+
+                    state["api_started"] = True
                     report = analyze_files(
                         OpenAI(api_key=api_key, timeout=60.0, max_retries=1),
                         paths,
                         instruction=instruction,
                         category_override=options[category_label],
                         refine=refine,
+                        progress=record_stage,
                     )
+                    # Den bereits kostenpflichtig erstellten Report unbedingt
+                    # vor einem möglichen lokalen Vorschaufehler sichern.
+                    history = st.session_state.get("velocut_lab_history", [])
+                    history.append({
+                        "build": LAB_BUILD,
+                        "instruction": instruction,
+                        "category": category_label,
+                        "refined": refine,
+                        "report": report,
+                    })
+                    st.session_state["velocut_lab_history"] = history[-4:]
+                    st.success("Analyse abgeschlossen; Ergebnis ist gespeichert.")
+
                     if preview_after_analysis:
+                        state["stage"] = "Lokale Video-Vorschau"
                         try:
                             clips = render_report_previews(paths, report)
                             report_bytes = json.dumps(
                                 report, sort_keys=True, ensure_ascii=False
                             ).encode("utf-8")
                             _remember_previews(clips, report_bytes)
-                        except PreviewError:
+                        except Exception as exc:
+                            # Fehler beim kostenfreien lokalen Rendering
+                            # dürfen niemals die Analyseergebnisse verstecken.
                             preview_warning = (
-                                "Die KI-Analyse war erfolgreich, aber die "
-                                "Video-Vorschau konnte nicht gerendert werden."
+                                "Die KI-Analyse wurde gespeichert, aber "
+                                "die lokale Video-Vorschau konnte nicht "
+                                f"erstellt werden ({type(exc).__name__})."
                             )
                     else:
                         st.session_state.pop("velocut_preview_clips", None)
                         st.session_state.pop("velocut_preview_id", None)
 
-                history = st.session_state.get("velocut_lab_history", [])
-                history.append({
-                    "build": LAB_BUILD,
-                    "instruction": instruction,
-                    "category": category_label,
-                    "refined": refine,
-                    "report": report,
-                })
-                st.session_state["velocut_lab_history"] = history[-4:]
-                st.success("Analyse abgeschlossen. Prüfe die Ergebnisse unten.")
                 if preview_warning:
                     st.warning(preview_warning)
-            except Exception as exc:
-                # Keine internen Fehlermeldungen mit möglichen Pfaden/Details veröffentlichen.
-                st.error(
-                    "Die Analyse konnte nicht abgeschlossen werden "
-                    f"({type(exc).__name__}). Prüfe Upload, Limits und "
-                    "Serverlogs der geschützten Testinstanz."
+            except VideoPreflightError as exc:
+                st.error("Video-Prüfung: " + str(exc))
+                st.info("Es wurden keine OpenAI-Anfragen gestartet.")
+            except ValueError as exc:
+                reason = str(exc)
+                # Nur bekannte, selbst formulierte Limits sicher anzeigen.
+                known = (
+                    "Prototyp-Limit:",
+                    "Zu viele Zeitfenster:",
+                    "Video benötigt bis zu ",
+                    "Video benötigt",
+                    "Nutzeranweisung ist zu lang",
                 )
+                safe_reason = (
+                    reason if reason.startswith(known)
+                    else "Bitte die technische Video-Prüfung und den Analyseabschnitt kontrollieren."
+                )
+                st.error(
+                    f"Fehler im Schritt „{state['stage']}“ (ValueError). "
+                    f"{safe_reason}"
+                )
+                if state["api_started"]:
+                    st.warning(
+                        "Möglicherweise wurden bereits API-Anfragen berechnet. "
+                        "Bitte vorerst keine neue Analyse starten."
+                    )
+            except Exception as exc:
+                st.error(
+                    f"Fehler im Schritt „{state['stage']}“ "
+                    f"({type(exc).__name__}). "
+                    "Bitte die Fehlermeldung oder die geschützten Serverlogs prüfen."
+                )
+                if state["api_started"]:
+                    st.warning(
+                        "Möglicherweise wurden bereits API-Anfragen berechnet. "
+                        "Bitte vorerst keine neue Analyse starten."
+                    )
 
 history = st.session_state.get("velocut_lab_history", [])
 if history:
