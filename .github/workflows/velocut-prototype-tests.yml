@@ -1,0 +1,27 @@
+name: VeloCut 2.0 prototype tests
+
+on:
+  push:
+    branches:
+      - feature/velocut-2-video-analysis
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile Python modules
+        run: python -m compileall -q candidate_windows.py frame_sampler.py highlight_analyzer.py prototype_analyze.py video_probe.py highlight_models.py
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -v
