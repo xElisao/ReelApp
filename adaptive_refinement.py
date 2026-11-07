@@ -27,6 +27,7 @@ class RefinedResult:
     selected_coarse_windows: int
     inspected_all_coarse_windows: bool
     notice: str | None
+    observed_windows: tuple[SceneObservation, ...] = ()
 
 
 def fine_windows(
@@ -181,4 +182,5 @@ def refine_for_goal(
         selected_coarse_windows=len(selected),
         inspected_all_coarse_windows=complete,
         notice=notice,
+        observed_windows=tuple(fine_observations),
     )
