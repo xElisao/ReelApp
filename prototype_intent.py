@@ -103,6 +103,19 @@ def analyze_files(
         )
         if refine else None
     )
+    def observation_record(obs):
+        return {
+            "source_id": obs.window.source_id,
+            "start_seconds": obs.window.start_seconds,
+            "end_seconds": obs.window.end_seconds,
+            "categories": list(obs.categories),
+            "visual_tags": list(obs.visual_tags),
+            "summary": obs.summary,
+            "evidence": obs.evidence,
+            "impact": obs.impact,
+            "technical_quality": obs.technical_quality,
+        }
+
     output = {
         "mode": "cached_static_frame_visual_observations_no_audio",
         "video_count": len(metadata),
@@ -114,6 +127,11 @@ def analyze_files(
         "detected_categories": list(result.detected_categories),
         "category_override": category_override,
         "notice": result.notice,
+        # Diagnosedaten: alle tatsächlich gesehenen Szenen, auch verworfene.
+        # Damit lässt sich die Filterentscheidung ohne weitere API-Kosten prüfen.
+        "observed_windows": [
+            observation_record(obs) for obs in observations
+        ],
         "recommendations": [
             {
                 "source_id": ranked.observation.window.source_id,
@@ -141,6 +159,9 @@ def analyze_files(
             "inspected_windows": refinement.inspected_windows,
             "selected_coarse_windows": refinement.selected_coarse_windows,
             "inspected_all_coarse_windows": refinement.inspected_all_coarse_windows,
+            "observed_windows": [
+                observation_record(obs) for obs in refinement.observed_windows
+            ],
             "notice": refinement.notice,
             "suggestions": [
                 {
