@@ -72,6 +72,35 @@ class ContentTests(unittest.TestCase):
                 frames=[SampledFrame(2, b"frame")],
             )
 
+    def test_prominence_from_real_frames_is_retained(self):
+        client = _client_response({
+            "categories": ["motorcycle_action", "travel_outdoor"],
+            "visual_tags": ["motorcycle", "scenery", "mountains"],
+            "summary": "Kleine Motorräder vor Bergpanorama",
+            "evidence": "Berge füllen den Hintergrund, kleine Motorräder vorne",
+            "impact": 4, "technical_quality": 5,
+            "prominence": {"motorcycle": 1, "scenery": 5, "mountains": 4},
+        })
+        scene = observe_window(
+            client, self.video, CandidateWindow("v1", 0, 8),
+            frames=[SampledFrame(2, b"jpeg")],
+        )
+        self.assertEqual(scene.prominence_for("motorcycle"), 1)
+        self.assertEqual(scene.prominence_for("scenery"), 5)
+
+    def test_invalid_prominence_is_not_silently_trusted(self):
+        client = _client_response({
+            "categories": ["travel_outdoor"], "visual_tags": ["scenery"],
+            "summary": "Landschaft", "evidence": "Sichtbare Hügel",
+            "impact": 4, "technical_quality": 4,
+            "prominence": {"motorcycle": 5},
+        })
+        with self.assertRaises(ContentUnderstandingError):
+            observe_window(
+                client, self.video, CandidateWindow("v1", 0, 8),
+                frames=[SampledFrame(2, b"jpeg")],
+            )
+
     def test_auto_detected_categories_ordered_by_frequency(self):
         scenes = [
             _scene(0, 3, ("motorcycle_action", "travel_outdoor"), ("motorcycle",)),
@@ -251,6 +280,38 @@ class RankingTests(unittest.TestCase):
         )
         self.assertEqual(action.ranked_scenes[0].observation, self.action)
         self.assertEqual(scenic.ranked_scenes[0].observation, self.scenic)
+
+    def test_composition_changes_scenic_ranking_not_just_tag_presence(self):
+        def scene(start, scenic_strength, motorcycle_strength):
+            return SceneObservation(
+                window=CandidateWindow("v1", start, start + 3),
+                categories=("travel_outdoor", "motorcycle_action"),
+                visual_tags=("motorcycle", "scenery", "mountains"),
+                summary="Bergpanorama mit Motorrädern",
+                evidence="Berge und Motorräder sichtbar",
+                impact=4, technical_quality=4,
+                prominence=(
+                    ("motorcycle", motorcycle_strength),
+                    ("scenery", scenic_strength),
+                    ("mountains", scenic_strength),
+                ),
+            )
+        motorcycle_central = scene(0, 1, 5)
+        landscape_central = scene(4, 5, 1)
+        result = rank_for_goal(
+            [motorcycle_central, landscape_central],
+            EditingGoal(
+                "Landschaft im Mittelpunkt, Motorräder als Nebenmotiv",
+                style="scenic", focus_tags=("scenery", "mountains"),
+                deemphasized_tags=("motorcycle",),
+            ),
+        )
+        self.assertEqual(len(result.ranked_scenes), 2)
+        self.assertEqual(result.ranked_scenes[0].observation, landscape_central)
+        self.assertGreater(
+            result.ranked_scenes[0].score, result.ranked_scenes[1].score
+        )
+        self.assertIn("Bilddominanz", result.ranked_scenes[0].explanation)
 
     def test_missing_wheelie_is_not_invented(self):
         result = rank_for_goal(
