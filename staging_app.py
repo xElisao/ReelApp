@@ -18,7 +18,7 @@ import streamlit as st
 from prototype_intent import analyze_files
 
 
-LAB_BUILD = "Intent-Fix 2 | 2026-11-07"
+LAB_BUILD = "Intent-Fix 3 | 2026-11-07"
 
 
 st.set_page_config(
@@ -132,6 +132,18 @@ def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
         )
     elif goal.get("uncheckable_requests"):
         st.caption("Keine sicher aus Bildern prüfbare Zielvorgabe abgeleitet.")
+    less_important = goal.get("deemphasized_tags") or []
+    excluded = goal.get("excluded_tags") or []
+    if less_important:
+        st.caption(
+            "Nur Nebenmotiv (nicht verboten): " +
+            ", ".join(tag_names.get(tag, tag) for tag in less_important)
+        )
+    if excluded:
+        st.caption(
+            "Ausgeschlossen: " +
+            ", ".join(tag_names.get(tag, tag) for tag in excluded)
+        )
     result = report.get("refinement") if show_refined and "refinement" in report else None
     if result:
         st.caption(f"Detailprüfung: {result['inspected_windows']} weitere Zeitfenster")
