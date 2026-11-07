@@ -73,6 +73,41 @@ class PreviewSelectionTests(unittest.TestCase):
         self.assertEqual(clips[0].mp4_bytes, b"preview")
         render.assert_called_once()
 
+    @patch("preview_clips.fingerprint_window")
+    @patch("preview_clips.extract_frame_cache")
+    @patch("preview_clips.probe_video")
+    @patch("preview_clips._render_mp4", return_value=b"mp4 bytes")
+    def test_saved_scenic_json_marks_same_camera_view_without_ai(
+        self, render, probe, extract, fingerprint,
+    ):
+        probe.return_value = _metadata()
+        extract.return_value = object()
+        fingerprint.return_value = ((123, 456), (123, 456), (123, 456))
+        report = _report([_suggestion(0, 3), _suggestion(4.376033, 7.376033)])
+        report["goal"] = {"style": "scenic", "focus_tags": ["scenery"]}
+        clips = render_report_previews([Path("/test/sample.mp4")], report)
+        self.assertEqual(len(clips), 2)
+        self.assertIsNone(clips[0].similar_view_as)
+        self.assertEqual(clips[1].similar_view_as, 1)
+        self.assertEqual(render.call_count, 2)
+        self.assertEqual(extract.call_count, 1)
+
+    @patch("preview_clips.fingerprint_window")
+    @patch("preview_clips.extract_frame_cache")
+    @patch("preview_clips.probe_video")
+    @patch("preview_clips._render_mp4", return_value=b"mp4 bytes")
+    def test_saved_action_json_keeps_distinct_moments(
+        self, render, probe, extract, fingerprint,
+    ):
+        probe.return_value = _metadata()
+        report = _report([_suggestion(0, 3), _suggestion(4.376033, 7.376033)])
+        report["goal"] = {"style": "action", "focus_tags": ["motorcycle"]}
+        clips = render_report_previews([Path("/test/sample.mp4")], report)
+        self.assertEqual(len(clips), 2)
+        self.assertIsNone(clips[1].similar_view_as)
+        extract.assert_not_called()
+        fingerprint.assert_not_called()
+
     @patch("preview_clips.probe_video")
     @patch("preview_clips._render_mp4")
     def test_wrong_video_length_is_rejected(self, render, probe):
