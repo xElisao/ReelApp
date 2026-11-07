@@ -16,6 +16,7 @@ import os
 from dataclasses import asdict
 from pathlib import Path
 
+from adaptive_refinement import refine_for_goal
 from candidate_windows import generate_candidate_windows
 from content_understanding import observe_window
 from highlight_models import CONTENT_NICHES
@@ -37,6 +38,7 @@ def analyze_files(
     category_override: str | None = None,
     model: str = "gpt-4o-mini",
     max_results: int = 5,
+    refine: bool = False,
 ) -> dict:
     """Führt alle Prototyp-Schritte mit strikten Kosten-/Dauerlimits aus."""
     if not 1 <= len(video_paths) <= MAX_VIDEOS:
@@ -76,7 +78,17 @@ def analyze_files(
         category_override=category_override,
         max_results=max_results,
     )
-    return {
+    refinement = (
+        refine_for_goal(
+            client, {item.source_id: item for item in metadata},
+            observations, goal,
+            category_override=category_override,
+            model=model,
+            max_results=max_results,
+        )
+        if refine else None
+    )
+    output = {
         "mode": "static_frame_visual_observations_no_audio",
         "video_count": len(metadata),
         "analyzed_windows": len(windows),
@@ -105,6 +117,31 @@ def analyze_files(
             "Bei fehlenden Treffern kann dichteres Sampling helfen."
         ),
     }
+    if refinement is not None:
+        output["refinement"] = {
+            "level": "denser_static_frame_windows",
+            "inspected_windows": refinement.inspected_windows,
+            "selected_coarse_windows": refinement.selected_coarse_windows,
+            "inspected_all_coarse_windows": refinement.inspected_all_coarse_windows,
+            "notice": refinement.notice,
+            "suggestions": [
+                {
+                    "source_id": scene.observation.window.source_id,
+                    "start_seconds": scene.observation.window.start_seconds,
+                    "end_seconds": scene.observation.window.end_seconds,
+                    "summary": scene.observation.summary,
+                    "reason": scene.explanation,
+                    "visual_tags": list(scene.observation.visual_tags),
+                    "score": scene.score,
+                }
+                for scene in refinement.scenes
+            ],
+            "warning": (
+                "Auch die engeren Zeitfenster sind keine exakten Schnittgrenzen. "
+                "Kurze Ereignisse können zwischen gesampelten Standbildern liegen."
+            ),
+        }
+    return output
 
 
 def main() -> None:
@@ -116,6 +153,7 @@ def main() -> None:
         default="auto", help="Auto-Erkennung oder bewusste Kategorie-Vorgabe",
     )
     parser.add_argument("--model", default="gpt-4o-mini")
+    parser.add_argument("--refine", action="store_true", help="Detailanalyse für ausgewählte grobe Zeitfenster")
     parser.add_argument("--output", type=Path, help="Optional JSON-Ergebnis speichern")
     args = parser.parse_args()
     if not os.environ.get("OPENAI_API_KEY"):
@@ -127,6 +165,7 @@ def main() -> None:
         instruction=args.instruction,
         category_override=None if args.category == "auto" else args.category,
         model=args.model,
+        refine=args.refine,
     )
     serialized = json.dumps(output, indent=2, ensure_ascii=False)
     if args.output is None:
