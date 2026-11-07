@@ -51,6 +51,42 @@ def _recover_obvious_visual_focus(
     return tuple(result)
 
 
+def _soften_background_requests(
+    instruction: str,
+    excluded: tuple[str, ...],
+    deemphasized: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """'Nicht im Mittelpunkt' ist keine Verbotsanweisung.
+
+    Nur eindeutig erkennbare Begriffe in derselben Satzhälfte umdeuten.
+    'Ohne X' und 'keine X' bleiben harte Ausschlüsse.
+    """
+    excluded_set = set(excluded)
+    reduced = list(deemphasized)
+    text = instruction.casefold()
+    markers = (
+        "nicht im mittelpunkt", "nicht im vordergrund",
+        "nur im hintergrund", "eher im hintergrund",
+    )
+    for sentence in re.split(r"[.!?;]", text):
+        if not any(marker in sentence for marker in markers):
+            continue
+        for pattern, tag in _VISIBLE_FOCUS_PATTERNS:
+            for mention in re.finditer(pattern, sentence):
+                before = sentence[max(0, mention.start() - 35):mention.start()]
+                # Ein klarer Ausschluss hat stets Vorrang.
+                if re.search(
+                    r"\\b(?:ohne|kein\\w*|niemals)\\s+(?:\\w+\\s+){0,2}$",
+                    before,
+                ):
+                    continue
+                if tag in excluded_set:
+                    excluded_set.remove(tag)
+                if tag not in reduced:
+                    reduced.append(tag)
+    return tuple(t for t in excluded if t in excluded_set), tuple(reduced)
+
+
 class GoalParsingError(RuntimeError):
     """Nutzerziel konnte nicht sicher interpretiert werden."""
 
@@ -74,15 +110,21 @@ class EditingGoal:
     required_tags: tuple[str, ...] = ()
     excluded_tags: tuple[str, ...] = ()
     uncheckable_requests: tuple[str, ...] = ()
+    deemphasized_tags: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if self.style not in STYLES:
             raise ValueError("Unbekannter Videoschnitt-Stil.")
-        for group in (self.focus_tags, self.required_tags, self.excluded_tags):
+        for group in (
+            self.focus_tags, self.required_tags,
+            self.excluded_tags, self.deemphasized_tags,
+        ):
             if any(tag not in VISUAL_TAGS for tag in group):
                 raise ValueError("Nicht unterstütztes Ziel-Tag.")
         if set(self.required_tags) & set(self.excluded_tags):
             raise ValueError("Gleichzeitig verlangte und ausgeschlossene Szenen.")
+        if set(self.deemphasized_tags) & (set(self.required_tags) | set(self.excluded_tags)):
+            raise ValueError("Widerspruch zwischen weicher und harter Motivvorgabe.")
         if not isinstance(self.original_instruction, str):
             raise ValueError("Nutzertext muss ein String sein.")
 
@@ -109,7 +151,10 @@ def understand_user_goal(
         "Antworte ausschließlich als JSON-Objekt mit: "
         "style (action/scenic/informative/emotional/balanced), "
         "focus_tags (erwünschte Tags), required_tags (nur ausdrücklich "
-        "verlangte Ereignisse oder Motive), excluded_tags (zu vermeidende Tags), "
+        "verlangte Ereignisse oder Motive), excluded_tags (vollständig "
+        "auszuschließende Motive: nur bei 'keine', 'ohne', 'niemals'), "
+        "deemphasized_tags (Motive, die sichtbar bleiben dürfen, aber "
+        "nicht im Mittelpunkt stehen sollen), "
         "uncheckable_requests (nicht mit diesem Tagvokabular überprüfbare "
         "inhaltliche Wünsche, als kurze deutsche Strings). "
         "Nenne bei erkennbaren Motiven immer passende focus_tags; sie "
@@ -121,6 +166,10 @@ def understand_user_goal(
         "Geschwindigkeit oder eine exakte Bewegung zwischen zwei Bildern. "
         "Nicht ganze Anweisungen pauschal als ungeprüft markieren, wenn "
         "Motorräder, Kurven oder Landschaften sichtbar sein können. "
+        "Beispiel: 'Zeige schöne Berglandschaften, die Motorräder sollen "
+        "nicht im Mittelpunkt stehen' -> focus_tags=['scenery','mountains'], "
+        "deemphasized_tags=['motorcycle'], excluded_tags=[]. "
+        "Nicht im Mittelpunkt bedeutet NIEMALS kompletter Ausschluss. "
         "Beispiel: 'Interessante Motorrad-Durchfahrten und dynamische Kurven, "
         "Motorräder gut sichtbar' -> style='action', "
         "focus_tags=['motorcycle','cornering'], required_tags=[], "
@@ -162,6 +211,15 @@ def understand_user_goal(
         focus_tags = _tags(payload, "focus_tags")
         required_tags = _tags(payload, "required_tags")
         excluded_tags = _tags(payload, "excluded_tags")
+        deemphasized_tags = _tags(
+            {"deemphasized_tags": payload.get("deemphasized_tags", [])},
+            "deemphasized_tags",
+        )
+        excluded_tags, deemphasized_tags = _soften_background_requests(
+            instruction, excluded_tags, deemphasized_tags,
+        )
+        # Weiche Nebenmotive nicht versehentlich positiv hervorheben.
+        focus_tags = tuple(t for t in focus_tags if t not in deemphasized_tags)
         # Nur falls das Modell offensichtliche sichtbare Motive als
         # ungeprüft einstuft: deren Bedeutung als weiches Ziel retten.
         # Ausschlüsse und ausdrücklich verlangte Ereignisse werden nie verändert.
@@ -175,6 +233,7 @@ def understand_user_goal(
             required_tags=required_tags,
             excluded_tags=excluded_tags,
             uncheckable_requests=tuple(wishes),
+            deemphasized_tags=deemphasized_tags,
         )
     except Exception as exc:
         raise GoalParsingError(
