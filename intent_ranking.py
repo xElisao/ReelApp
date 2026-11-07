@@ -21,6 +21,12 @@ STYLE_TAGS = {
     "balanced": frozenset(),
 }
 
+# Gültige sichtbare Landschaftsmerkmale. 'scenery' kann durch Berge,
+# Wälder, Wasser etc. belegt sein; 'mountains' bleibt ein eigener Fokus.
+FOCUS_EVIDENCE = {
+    "scenery": frozenset({"scenery", "mountains", "forest", "water", "sunset", "city"}),
+}
+
 
 @dataclass(frozen=True)
 class RankedScene:
@@ -93,7 +99,10 @@ def rank_for_goal(
             continue
         if not set(goal.required_tags).issubset(tags):
             continue
-        matched = tuple(sorted(tags.intersection(goal.focus_tags)))
+        matched = tuple(sorted(
+            tag for tag in goal.focus_tags
+            if tags.intersection(FOCUS_EVIDENCE.get(tag, frozenset({tag})))
+        ))
         # Wenn ein Fokus vorgegeben ist, werden fehlende Treffer nicht
         # als Treffer ausgegeben – auch bei hoher generischer Qualität nicht.
         if goal.focus_tags and not matched and not goal.required_tags:
@@ -102,15 +111,22 @@ def rank_for_goal(
         style_match = bool(tags.intersection(STYLE_TAGS[goal.style]))
         quality = 0.65 * obs.impact + 0.35 * obs.technical_quality
         score = 20 * quality + 25 * match_fraction + (10 if style_match else 0)
+        # "Soll nicht im Mittelpunkt stehen" ist ein weiches Minus, kein Filter.
+        secondary = tuple(sorted(tags.intersection(goal.deemphasized_tags)))
+        score -= min(18, 9 * len(secondary))
         if goal.focus_tags:
             score = min(100.0, score * 0.75)  # Kein blindes Überbewerten.
-        score = round(min(100.0, score), 2)
+        score = round(max(0.0, min(100.0, score)), 2)
         explanation = (
             f"Bildbeleg: {obs.evidence}. "
             + (
                 "Passende Merkmale: " + ", ".join(matched)
                 if matched
                 else "Allgemeine visuelle Qualität"
+            )
+            + (
+                ". Nebenmotiv (geringer gewichtet): " + ", ".join(secondary)
+                if secondary else ""
             )
         )
         candidates.append(RankedScene(obs, score, matched, explanation))
