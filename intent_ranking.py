@@ -60,20 +60,28 @@ def rank_for_goal(
         raise ValueError("max_results muss >= 1 sein.")
 
     categories = detected_categories(observations)
-    if goal.uncheckable_requests:
+    uncertainty_notice = (
+        "Ein Teil des Nutzerwunsches kann anhand einzelner Bilder nicht "
+        "sicher geprüft werden: " + ", ".join(goal.uncheckable_requests)
+        if goal.uncheckable_requests else None
+    )
+    # Nicht jede schwierige Formulierung darf das gesamte Ergebnis blockieren.
+    # Falls kein überprüfbares Motiv übrig bleibt, jedoch keine scheinbar
+    # passende allgemeine Szene als Treffer ausgeben.
+    if goal.uncheckable_requests and not (goal.focus_tags or goal.required_tags):
         return RankingResult(
             (), categories,
-            "Ein Teil des Nutzerwunsches kann derzeit anhand der "
-            "analysierten Bilder nicht zuverlässig geprüft werden: "
-            + ", ".join(goal.uncheckable_requests),
+            uncertainty_notice + ". Keine überprüfbaren Bildmotive aus "
+            "dieser Anweisung abgeleitet.",
         )
     observed_tags = set().union(*(set(obs.visual_tags) for obs in observations))
     missing = set(goal.required_tags) - observed_tags
     if missing:
         return RankingResult(
             (), categories,
-            "Ausdrücklich gewünschte Ereignisse/Motive nicht nachgewiesen: "
-            + ", ".join(sorted(missing)),
+            "Ausdrücklich gewünschte Ereignisse/Motive in den Stichproben "
+            "nicht nachgewiesen: " + ", ".join(sorted(missing))
+            + (". " + uncertainty_notice if uncertainty_notice else ""),
         )
 
     candidates: list[RankedScene] = []
@@ -122,11 +130,13 @@ def rank_for_goal(
         if len(chosen) >= max_results:
             break
     if chosen:
-        return RankingResult(tuple(chosen), categories)
+        return RankingResult(tuple(chosen), categories, uncertainty_notice)
 
-    return RankingResult(
-        (), categories,
+    message = (
         "Keine ausreichend passend belegten Szenen gefunden. "
         "Nutzerwunsch ändern, andere Bilder untersuchen oder eine genauere "
-        "Analyse durchführen; keine Ersatz-Highlights erfunden.",
+        "Analyse durchführen; keine Ersatz-Highlights erfunden."
     )
+    if uncertainty_notice:
+        message += " " + uncertainty_notice
+    return RankingResult((), categories, message)
