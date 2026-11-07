@@ -108,6 +108,34 @@ class PreviewSelectionTests(unittest.TestCase):
         extract.assert_not_called()
         fingerprint.assert_not_called()
 
+    @patch("preview_clips.detect_hard_cuts", return_value=(8.0, 18.0, 24.0))
+    @patch("preview_clips.probe_video")
+    @patch("preview_clips._render_mp4", return_value=b"preview")
+    def test_old_report_skips_mixed_motorrad_clip_without_ai(
+        self, render, probe, detect,
+    ):
+        probe.return_value = _metadata(duration=32.0)
+        report = _report([
+            _suggestion(10.5, 13.5),
+            _suggestion(19.5, 22.5),
+            _suggestion(22.5, 25.5),
+        ])
+        clips = render_report_previews([Path("/test/sample.mp4")], report)
+        self.assertEqual(len(clips), 2)
+        self.assertEqual(render.call_count, 2)
+        self.assertEqual([c.start_seconds for c in clips], [10.5, 19.5])
+        detect.assert_called_once()
+
+    @patch("preview_clips.detect_hard_cuts", return_value=(8.0, 18.0, 24.0))
+    @patch("preview_clips.probe_video")
+    @patch("preview_clips._render_mp4", return_value=b"preview")
+    def test_shot_start_on_cut_allowed(self, render, probe, detect):
+        probe.return_value = _metadata(duration=32.0)
+        report = _report([_suggestion(8.0, 11.0)])
+        clips = render_report_previews([Path("/test/sample.mp4")], report)
+        self.assertEqual(len(clips), 1)
+        render.assert_called_once()
+
     @patch("preview_clips.probe_video")
     @patch("preview_clips._render_mp4")
     def test_wrong_video_length_is_rejected(self, render, probe):
