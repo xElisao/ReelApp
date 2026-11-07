@@ -6,11 +6,13 @@ Keine exakten finalen Schnitte. Unbelegte Wünsche erzeugen KEINEN Ersatzclip.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from content_understanding import SceneObservation, detected_categories
 from highlight_models import CONTENT_NICHES
 from user_goals import EditingGoal
+from candidate_windows import CandidateWindow
+from visual_diversity import ShotFingerprint, likely_same_camera_view
 
 
 STYLE_TAGS = {
@@ -41,6 +43,7 @@ class RankingResult:
     ranked_scenes: tuple[RankedScene, ...]
     detected_categories: tuple[str, ...]
     notice: str | None = None
+    repeated_views_suppressed: int = 0
 
 
 def _prominence_for_focus(obs: SceneObservation, tag: str) -> float | None:
@@ -66,6 +69,7 @@ def rank_for_goal(
     *,
     category_override: str | None = None,
     max_results: int = 5,
+    scene_fingerprints: Mapping[CandidateWindow, ShotFingerprint] | None = None,
 ) -> RankingResult:
     """Priorisiert echte Beobachtungen, vermeidet überlappende Zeitfenster."""
     if category_override is not None and category_override not in CONTENT_NICHES:
@@ -169,14 +173,47 @@ def rank_for_goal(
         )
     )
     chosen: list[RankedScene] = []
+    suppressed = 0
     for item in candidates:
         if any(_overlaps(item.observation, other.observation) for other in chosen):
             continue
+        # Eine Landschaft aus derselben Kameraperspektive nicht mehrfach
+        # präsentieren; Action-Ereignisse dagegen dürfen sich wiederholen.
+        if goal.style == "scenic" and scene_fingerprints is not None:
+            current = scene_fingerprints.get(item.observation.window, ())
+            if current and any(
+                item.observation.window.source_id == other.observation.window.source_id
+                and likely_same_camera_view(
+                    current, scene_fingerprints.get(other.observation.window, ())
+                )
+                for other in chosen
+            ):
+                suppressed += 1
+                continue
         chosen.append(item)
         if len(chosen) >= max_results:
             break
     if chosen:
-        return RankingResult(tuple(chosen), categories, uncertainty_notice)
+        notices = [uncertainty_notice] if uncertainty_notice else []
+        if suppressed:
+            notices.append(
+                f"{suppressed} weitere Zeitfenster wegen wahrscheinlich gleicher "
+                "Kameraansicht zurückgestellt; für Landschaften werden "
+                "unterschiedliche Ansichten bevorzugt."
+            )
+        observed_focus = {
+            tag for item in chosen for tag in item.matched_tags
+        }
+        absent_focus = set(goal.focus_tags) - observed_focus
+        if absent_focus:
+            notices.append(
+                "Ein Teil der gewünschten Bildmotive wurde in diesen "
+                "Vorschlägen nicht belegt: " + ", ".join(sorted(absent_focus)) + "."
+            )
+        return RankingResult(
+            tuple(chosen), categories, " ".join(notices) if notices else None,
+            repeated_views_suppressed=suppressed,
+        )
 
     message = (
         "Keine ausreichend passend belegten Szenen gefunden. "
