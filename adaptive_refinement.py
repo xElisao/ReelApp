@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 from candidate_windows import CandidateWindow
+from batch_frames import FrameCache, select_cached_frames
 from content_understanding import SceneObservation, observe_window
 from intent_ranking import RankedScene, rank_for_goal
 from user_goals import EditingGoal
@@ -75,6 +76,7 @@ def refine_for_goal(
     max_coarse_windows: int = 2,
     max_fine_windows: int = 12,
     max_results: int = 5,
+    frame_caches: Mapping[str, FrameCache] | None = None,
 ) -> RefinedResult:
     """Analysiert möglichst passende grobe Fenster in höherer zeitlicher Auflösung.
 
@@ -140,13 +142,21 @@ def refine_for_goal(
             "bitte grobe Fensterzahl oder Budget anpassen."
         )
 
-    fine_observations = [
-        observe_window(
-            client, source_metadata[window.source_id], window,
-            model=model,
+    fine_observations = []
+    for window in expanded:
+        options = {}
+        if frame_caches is not None:
+            if window.source_id not in frame_caches:
+                raise ValueError("Kein FrameCache für Quellvideo vorhanden.")
+            options["frames"] = select_cached_frames(
+                frame_caches[window.source_id], window, frame_count=5
+            )
+        fine_observations.append(
+            observe_window(
+                client, source_metadata[window.source_id], window,
+                model=model, **options,
+            )
         )
-        for window in expanded
-    ]
     ranked = rank_for_goal(
         fine_observations, goal, category_override=category_override,
         max_results=max_results,
