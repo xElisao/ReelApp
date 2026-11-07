@@ -111,8 +111,23 @@ def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
     st.caption(
         "Erkannt: " + (", ".join(report.get("detected_categories", [])) or "Unklar")
     )
-    if report.get("notice"):
-        st.warning(str(report["notice"]))
+    # Sichtbar machen, wie der freie Nutzerwunsch verstanden wurde.
+    goal = report.get("goal") or {}
+    tag_names = {
+        "motorcycle": "Motorräder", "cornering": "Kurven",
+        "scenery": "Landschaften", "mountains": "Berge",
+        "sunset": "Sonnenuntergang", "fitness": "Fitness",
+        "exercise": "Übungen", "vehicles": "Fahrzeuge",
+        "wheelie": "Wheelie",
+    }
+    focus = goal.get("focus_tags") or []
+    if focus:
+        st.markdown(
+            "**Verstandenes Ziel:** " +
+            ", ".join(tag_names.get(tag, tag) for tag in focus)
+        )
+    elif goal.get("uncheckable_requests"):
+        st.caption("Keine sicher aus Bildern prüfbare Zielvorgabe abgeleitet.")
     result = report.get("refinement") if show_refined and "refinement" in report else None
     if result:
         st.caption(f"Detailprüfung: {result['inspected_windows']} weitere Zeitfenster")
@@ -120,6 +135,8 @@ def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
             st.info(result["notice"])
         rows = result.get("suggestions", [])
     else:
+        if report.get("notice"):
+            st.info(str(report["notice"]))
         rows = report.get("recommendations", [])
 
     if not rows:
