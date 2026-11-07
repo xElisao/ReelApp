@@ -43,6 +43,14 @@ class RankingResult:
     notice: str | None = None
 
 
+def _prominence_for_focus(obs: SceneObservation, tag: str) -> float | None:
+    """Get a visual-focus estimate, including derived scenery markers."""
+    candidates = FOCUS_EVIDENCE.get(tag, frozenset({tag}))
+    known = [obs.prominence_for(candidate) for candidate in candidates]
+    available = [value for value in known if value is not None]
+    return max(available) if available else None
+
+
 def _overlaps(left: SceneObservation, right: SceneObservation) -> bool:
     a, b = left.window, right.window
     return (
@@ -111,11 +119,28 @@ def rank_for_goal(
         style_match = bool(tags.intersection(STYLE_TAGS[goal.style]))
         quality = 0.65 * obs.impact + 0.35 * obs.technical_quality
         score = 20 * quality + 25 * match_fraction + (10 if style_match else 0)
-        # "Soll nicht im Mittelpunkt stehen" ist ein weiches Minus, kein Filter.
+        # Sichtbare Motive sind nicht zwangsläufig der Bildmittelpunkt.
+        # Nur vorhandene Dominanz-Schätzungen beeinflussen die Feinbewertung.
+        focus_values = [
+            _prominence_for_focus(obs, tag) for tag in matched
+        ]
+        known_focus = [value for value in focus_values if value is not None]
+        if known_focus:
+            score += 14 * (sum(known_focus) / len(known_focus)) / 5
         secondary = tuple(sorted(tags.intersection(goal.deemphasized_tags)))
-        score -= min(18, 9 * len(secondary))
+        secondary_details = []
+        for tag in secondary:
+            p = obs.prominence_for(tag)
+            if p is None:
+                # Bis das Modell Dominanzwerte liefert, neutraler Fallback.
+                score -= 9
+                secondary_details.append(f"{tag} (Dominanz unbekannt)")
+            else:
+                # Bei 5/5: merkliche Abwertung; bei 0/5 nur kleine Abwertung.
+                score -= 4 + 20 * (p / 5)
+                secondary_details.append(f"{tag} (Bilddominanz ca. {p:g}/5)")
         if goal.focus_tags:
-            score = min(100.0, score * 0.75)  # Kein blindes Überbewerten.
+            score *= 0.75  # Vorläufige Gewichtung, kein Qualitätsversprechen.
         score = round(max(0.0, min(100.0, score)), 2)
         explanation = (
             f"Bildbeleg: {obs.evidence}. "
@@ -125,8 +150,13 @@ def rank_for_goal(
                 else "Allgemeine visuelle Qualität"
             )
             + (
-                ". Nebenmotiv (geringer gewichtet): " + ", ".join(secondary)
-                if secondary else ""
+                ". Nebenmotiv (geringer gewichtet): " + ", ".join(secondary_details)
+                if secondary_details else ""
+            )
+            + (
+                ". Geschätzte Bilddominanz des Hauptmotivs: "
+                + f"{sum(known_focus)/len(known_focus):.1f}/5"
+                if known_focus else ""
             )
         )
         candidates.append(RankedScene(obs, score, matched, explanation))
