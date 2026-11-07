@@ -100,6 +100,45 @@ class GoalTests(unittest.TestCase):
         goal = understand_user_goal(client, "Zeig den Wheelie")
         self.assertEqual(goal.required_tags, ("wheelie",))
 
+    def test_uploaded_motorrad_prompt_is_not_lost_as_uncheckable(self):
+        """Regression: reale erste Staging-Auswertung markierte alles als ungeprüft."""
+        instruction = (
+            "Erkenne die interessantesten Motorrad-Durchfahrten und "
+            "dynamischen Kurven. Bevorzuge Momente, in denen die "
+            "Motorräder gut sichtbar sind."
+        )
+        client = _client_response({
+            "style": "action", "focus_tags": [],
+            "required_tags": [], "excluded_tags": [],
+            "uncheckable_requests": [
+                "interessanteste Motorrad-Durchfahrten",
+                "dynamische Kurven",
+                "Motorräder gut sichtbar",
+            ],
+        })
+        goal = understand_user_goal(client, instruction)
+        self.assertIn("motorcycle", goal.focus_tags)
+        self.assertIn("cornering", goal.focus_tags)
+        self.assertEqual(goal.original_instruction, instruction)
+        action_scene = _scene(
+            0, 3, ("motorcycle_action",), ("motorcycle", "cornering"),
+        )
+        result = rank_for_goal([action_scene], goal)
+        self.assertEqual(len(result.ranked_scenes), 1)
+        self.assertIn("nicht sicher", result.notice)
+
+    def test_negative_motorcycle_words_do_not_become_positive_focus(self):
+        client = _client_response({
+            "style": "scenic", "focus_tags": [],
+            "required_tags": [], "excluded_tags": ["motorcycle"],
+            "uncheckable_requests": ["sonstige Wünsche"],
+        })
+        goal = understand_user_goal(
+            client, "Bitte ohne Motorräder, nur die Landschaft."
+        )
+        self.assertNotIn("motorcycle", goal.focus_tags)
+        self.assertIn("scenery", goal.focus_tags)
+
     def test_empty_goal_is_balanced_without_api(self):
         client = Mock()
         goal = understand_user_goal(client, "")
@@ -146,6 +185,20 @@ class RankingTests(unittest.TestCase):
         )
         self.assertFalse(result.ranked_scenes)
         self.assertIn("wheelie", result.notice)
+
+    def test_partial_uncheckable_request_still_finds_visible_target(self):
+        result = rank_for_goal(
+            self.scenes,
+            EditingGoal(
+                "Kurven bei Motorengeräuschen",
+                style="action",
+                focus_tags=("cornering",),
+                uncheckable_requests=("Motorengeräusche",),
+            ),
+        )
+        self.assertEqual(len(result.ranked_scenes), 1)
+        self.assertEqual(result.ranked_scenes[0].observation, self.action)
+        self.assertIn("Motorengeräusche", result.notice)
 
     def test_unknown_uncheckable_request_does_not_fake_match(self):
         result = rank_for_goal(
