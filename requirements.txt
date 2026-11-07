@@ -1,14 +1,5 @@
-# Entwicklungsbranch – separates VeloCut-2.0-KI-Labor
-# Python 3.11 für die Staging-Umgebung verwenden.
+# Nur das separate VeloCut-2.0-KI-Labor (staging_app.py).
+# Die alte Live-App und der Stripe-Webhook werden auf main unverändert betrieben.
+# Hier keine MoviePy/Pillow/NumPy-Altpins und kein FastAPI/Stripe nötig.
 streamlit>=1.40,<2
 openai>=1.30,<3
-
-# Bestehende Anwendung: Webhook und Stripe
-fastapi>=0.100,<1
-uvicorn>=0.27,<1
-stripe>=8,<15
-
-# Bestehender app.py-Code nutzt MoviePy 1.x; noch nicht für 2.x migriert.
-moviepy==1.0.3
-Pillow<10
-numpy<2
