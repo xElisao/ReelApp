@@ -139,6 +139,80 @@ class GoalTests(unittest.TestCase):
         self.assertNotIn("motorcycle", goal.focus_tags)
         self.assertIn("scenery", goal.focus_tags)
 
+    def test_landscape_request_background_motorcycles_not_hard_excluded(self):
+        """Regression: echtes JSON aus dem zweiten Streamlit-Praxistest."""
+        instruction = (
+            "Zeige die schönsten Berglandschaften, beeindruckende Aussichten "
+            "und die landschaftlich attraktivsten Momente. Die Motorräder "
+            "sollen dabei nicht im Mittelpunkt stehen."
+        )
+        client = _client_response({
+            "style": "scenic",
+            "focus_tags": ["scenery", "mountains"],
+            "required_tags": [],
+            "excluded_tags": ["motorcycle"],
+            "uncheckable_requests": [],
+        })
+        goal = understand_user_goal(client, instruction)
+        self.assertEqual(goal.focus_tags, ("scenery", "mountains"))
+        self.assertNotIn("motorcycle", goal.excluded_tags)
+        self.assertIn("motorcycle", goal.deemphasized_tags)
+        scenery_with_motorcycle = _scene(
+            0, 3, ("motorcycle_action", "travel_outdoor"),
+            ("motorcycle", "mountains", "scenery"),
+        )
+        result = rank_for_goal([scenery_with_motorcycle], goal)
+        self.assertEqual(len(result.ranked_scenes), 1)
+        self.assertIn("Nebenmotiv", result.ranked_scenes[0].explanation)
+
+    def test_explicit_without_motorcycles_keeps_hard_exclusion(self):
+        client = _client_response({
+            "style": "scenic",
+            "focus_tags": ["scenery"],
+            "required_tags": [],
+            "excluded_tags": ["motorcycle"],
+            "deemphasized_tags": [],
+            "uncheckable_requests": [],
+        })
+        goal = understand_user_goal(
+            client, "Bitte nur die Berge und keine Motorräder zeigen."
+        )
+        self.assertEqual(goal.excluded_tags, ("motorcycle",))
+        self.assertEqual(goal.deemphasized_tags, ())
+        scene = _scene(
+            0, 3, ("travel_outdoor",), ("mountains", "motorcycle"),
+        )
+        self.assertEqual(rank_for_goal([scene], goal).ranked_scenes, ())
+
+    def test_model_can_emit_soft_background_field(self):
+        client = _client_response({
+            "style": "scenic",
+            "focus_tags": ["scenery", "mountains"],
+            "required_tags": [],
+            "excluded_tags": [],
+            "deemphasized_tags": ["motorcycle"],
+            "uncheckable_requests": [],
+        })
+        goal = understand_user_goal(
+            client, "Landschaften bevorzugen, Motorrad nur als Nebenmotiv."
+        )
+        self.assertEqual(goal.deemphasized_tags, ("motorcycle",))
+
+    def test_scenic_focus_accepts_visible_forests_not_invented_mountains(self):
+        goal = EditingGoal(
+            "Schöne Landschaften",
+            style="scenic",
+            focus_tags=("scenery",),
+        )
+        forest = _scene(0, 3, ("travel_outdoor",), ("forest",))
+        ranked = rank_for_goal([forest], goal)
+        self.assertEqual(len(ranked.ranked_scenes), 1)
+        self.assertIn("scenery", ranked.ranked_scenes[0].matched_tags)
+        mountains_only = rank_for_goal(
+            [forest], EditingGoal("Berge", style="scenic", focus_tags=("mountains",)),
+        )
+        self.assertEqual(mountains_only.ranked_scenes, ())
+
     def test_empty_goal_is_balanced_without_api(self):
         client = Mock()
         goal = understand_user_goal(client, "")
