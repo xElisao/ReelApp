@@ -18,6 +18,9 @@ import streamlit as st
 from prototype_intent import analyze_files
 
 
+LAB_BUILD = "Intent-Fix 2 | 2026-11-07"
+
+
 st.set_page_config(
     page_title="VeloCut 2.0 | KI-Labor",
     page_icon="🎬",
@@ -44,6 +47,7 @@ def _authenticated(password: str, expected: str) -> bool:
 
 st.title("🎬 VeloCut 2.0 – KI-Labor")
 st.caption("Separater Testbereich für echte Video-Inhaltsanalyse und Nutzerwünsche.")
+st.caption(f"Testversion: {LAB_BUILD}")
 
 access_password = _secret("STAGING_ACCESS_PASSWORD")
 api_key = _secret("OPENAI_API_KEY")
@@ -195,6 +199,7 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
 
                 history = st.session_state.get("velocut_lab_history", [])
                 history.append({
+                    "build": LAB_BUILD,
                     "instruction": instruction,
                     "category": category_label,
                     "refined": refine,
@@ -221,6 +226,12 @@ if history:
     for index, entry in enumerate(reversed(history)):
         caption = f"{entry['instruction'] or '(ohne Vorgabe)'} · {entry['category']}"
         with st.expander(caption, expanded=(index == 0)):
+            if entry.get("build") != LAB_BUILD:
+                st.warning(
+                    "Dies ist ein gespeichertes Ergebnis einer früheren "
+                    "Testversion. Bitte die Analyse neu starten, um die "
+                    "korrigierte Wunsch-Erkennung zu prüfen."
+                )
             _display(
                 entry["report"], show_refined=entry["refined"],
                 download_key=str(index),
