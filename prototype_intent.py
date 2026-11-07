@@ -24,6 +24,8 @@ from highlight_models import CONTENT_NICHES
 from intent_ranking import rank_for_goal
 from user_goals import understand_user_goal
 from video_probe import probe_video
+from frame_sampler import FrameSampleError
+from visual_diversity import VisualDiversityError, fingerprint_window
 
 
 MAX_VIDEOS = 3
@@ -87,10 +89,20 @@ def analyze_files(
         )
         for item, window in windows
     ]
+    fingerprints = {}
+    for obs in observations:
+        try:
+            fingerprints[obs.window] = fingerprint_window(
+                caches[obs.window.source_id], obs.window
+            )
+        except (VisualDiversityError, FrameSampleError):
+            # Bildvergleich unbekannt: keine zwei unbewiesenen Bilder gleichsetzen.
+            continue
     result = rank_for_goal(
         observations, goal,
         category_override=category_override,
         max_results=max_results,
+        scene_fingerprints=fingerprints if fingerprints else None,
     )
     refinement = (
         refine_for_goal(
@@ -128,6 +140,7 @@ def analyze_files(
         "detected_categories": list(result.detected_categories),
         "category_override": category_override,
         "notice": result.notice,
+        "repeated_views_suppressed": result.repeated_views_suppressed,
         # Diagnosedaten: alle tatsächlich gesehenen Szenen, auch verworfene.
         # Damit lässt sich die Filterentscheidung ohne weitere API-Kosten prüfen.
         "observed_windows": [
@@ -165,6 +178,7 @@ def analyze_files(
                 observation_record(obs) for obs in refinement.observed_windows
             ],
             "notice": refinement.notice,
+            "repeated_views_suppressed": refinement.repeated_views_suppressed,
             "suggestions": [
                 {
                     "source_id": scene.observation.window.source_id,
