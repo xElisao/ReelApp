@@ -106,14 +106,14 @@ category_label = st.selectbox(
 )
 refine = st.checkbox("Interessante Stellen genauer untersuchen", value=True)
 
-def _display(report: dict) -> None:
-    st.subheader("Ergebnis der letzten Analyse")
+def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
+    st.subheader("Ergebnis dieser Analyse")
     st.caption(
         "Erkannt: " + (", ".join(report.get("detected_categories", [])) or "Unklar")
     )
     if report.get("notice"):
         st.warning(str(report["notice"]))
-    result = report.get("refinement") if refine and "refinement" in report else None
+    result = report.get("refinement") if show_refined and "refinement" in report else None
     if result:
         st.caption(f"Detailprüfung: {result['inspected_windows']} weitere Zeitfenster")
         if result.get("notice"):
@@ -141,6 +141,7 @@ def _display(report: dict) -> None:
         data=json.dumps(report, indent=2, ensure_ascii=False).encode("utf-8"),
         file_name="velocut_analysis.json",
         mime="application/json",
+        key=f"download_{download_key}",
     )
 
 
@@ -149,8 +150,8 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
         st.error("Bitte 1 bis 3 Videos hochladen.")
     elif len(instruction) > 1000:
         st.error("Nutzerwunsch ist zu lang (max. 1000 Zeichen).")
-    elif any(item.size > 80 * 1024 * 1024 for item in uploads):
-        st.error("Maximal 80 MB pro Video für die Testinstanz.")
+    elif any(item.size > 80 * 1024 * 1024 for item in uploads) or sum(item.size for item in uploads) > 160 * 1024 * 1024:
+        st.error("Maximal 80 MB pro Video und 160 MB insgesamt für die Testinstanz.")
     else:
         with st.spinner("Video-Inhalte werden analysiert – externe API-Aufrufe laufen ..."):
             try:
@@ -175,8 +176,14 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                         refine=refine,
                     )
 
-                st.session_state["velocut_lab_report"] = report
-                st.session_state["velocut_lab_refined"] = refine
+                history = st.session_state.get("velocut_lab_history", [])
+                history.append({
+                    "instruction": instruction,
+                    "category": category_label,
+                    "refined": refine,
+                    "report": report,
+                })
+                st.session_state["velocut_lab_history"] = history[-4:]
                 st.success("Analyse abgeschlossen. Prüfe die Ergebnisse unten.")
             except Exception as exc:
                 # Keine internen Fehlermeldungen mit möglichen Pfaden/Details veröffentlichen.
@@ -186,8 +193,18 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                     "Serverlogs der geschützten Testinstanz."
                 )
 
-if "velocut_lab_report" in st.session_state:
-    previous_mode = refine
-    refine = st.session_state.get("velocut_lab_refined", False)
-    _display(st.session_state["velocut_lab_report"])
-    refine = previous_mode
+history = st.session_state.get("velocut_lab_history", [])
+if history:
+    st.divider()
+    st.subheader("Analysen vergleichen")
+    st.caption(
+        "Die letzten bis zu vier Auswertungen bleiben nur innerhalb dieser "
+        "Streamlit-Sitzung zum Vergleich sichtbar."
+    )
+    for index, entry in enumerate(reversed(history)):
+        caption = f"{entry['instruction'] or '(ohne Vorgabe)'} · {entry['category']}"
+        with st.expander(caption, expanded=(index == 0)):
+            _display(
+                entry["report"], show_refined=entry["refined"],
+                download_key=str(index),
+            )
