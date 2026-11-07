@@ -38,6 +38,12 @@ class SceneObservation:
     evidence: str
     impact: float
     technical_quality: float
+    # Einschätzung der visuellen Dominanz: 0 = kaum sichtbar, 5 = Bildfokus.
+    # Fehlt für ältere Modellantworten oder nicht bewertbare Merkmale.
+    prominence: tuple[tuple[str, float], ...] = ()
+
+    def prominence_for(self, tag: str) -> float | None:
+        return dict(self.prominence).get(tag)
 
     def __post_init__(self) -> None:
         if not self.categories or len(set(self.categories)) != len(self.categories):
@@ -60,6 +66,31 @@ class SceneObservation:
                 or not 0 <= score <= 5
             ):
                 raise ValueError("Bewertungen müssen endliche Zahlen von 0 bis 5 sein.")
+        keys: set[str] = set()
+        for item in self.prominence:
+            if not isinstance(item, tuple) or len(item) != 2:
+                raise ValueError("prominence muss aus (Tag, Wert)-Paaren bestehen.")
+            tag, strength = item
+            if tag not in VISUAL_TAGS or tag not in self.visual_tags or tag in keys:
+                raise ValueError("Ungültige oder doppelte Dominanz-Tags.")
+            if (
+                isinstance(strength, bool)
+                or not isinstance(strength, (int, float))
+                or not math.isfinite(strength)
+                or not 0 <= strength <= 5
+            ):
+                raise ValueError("Bilddominanz muss zwischen 0 und 5 liegen.")
+            keys.add(tag)
+
+
+def _read_prominence(payload: dict, tags: tuple[str, ...]) -> tuple[tuple[str, float], ...]:
+    """Ausdrücklich beobachtete Dominanz; fehlende Werte bleiben unbekannt."""
+    raw = payload.get("prominence", {})
+    if not isinstance(raw, dict) or len(raw) > 12:
+        raise ValueError("prominence muss eine kleine JSON-Zuordnung sein.")
+    if any(key not in tags for key in raw):
+        raise ValueError("Dominanz darf nur erkannte Tags enthalten.")
+    return tuple(sorted(raw.items()))
 
 
 def _read_list(data: dict, key: str, allowed: frozenset[str]) -> tuple[str, ...]:
@@ -106,7 +137,16 @@ def observe_window(
         "Antworte ausschließlich mit JSON-Objekt: "
         "categories (Liste), visual_tags (Liste), summary (kurzer Satz), "
         "evidence (konkrete sichtbare Beobachtung), impact (0 bis 5), "
-        "technical_quality (0 bis 5). Lege keine Nutzerpräferenzen zugrunde. "
+        "technical_quality (0 bis 5), prominence (JSON-Objekt: jedem "
+        "wirklich erkannten visuellen Tag seine Bilddominanz zuordnen, "
+        "Skala 0 bis 5; 0=sehr klein/kaum sichtbar, "
+        "5=bildfüllend oder klarer visueller Mittelpunkt). "
+        "Beurteile die Dominanz anhand von Objektgröße, Position und "
+        "Bildgestaltung in den gezeigten Einzelbildern – nicht nach "
+        "Erzähltext oder Nutzerpräferenzen. Auch bei mehreren sichtbaren "
+        "Motiven kann eins dominant und das andere Hintergrund sein. "
+        "Bei Unsicherheit einzelne prominence-Werte weglassen; niemals "
+        "Motivpräsenz mit Bilddominanz gleichsetzen. "
         "Bei wenig erkennbarem Inhalt lieber wenige Tags und niedrige Werte."
     )
     content: list[dict] = [{"type": "text", "text": prompt}]
@@ -141,14 +181,16 @@ def observe_window(
         payload = json.loads(response.choices[0].message.content)
         if not isinstance(payload, dict):
             raise ValueError("Kein JSON-Objekt.")
+        tags = _read_list(payload, "visual_tags", VISUAL_TAGS)
         return SceneObservation(
             window=window,
             categories=_read_list(payload, "categories", CONTENT_NICHES),
-            visual_tags=_read_list(payload, "visual_tags", VISUAL_TAGS),
+            visual_tags=tags,
             summary=payload["summary"],
             evidence=payload["evidence"],
             impact=payload["impact"],
             technical_quality=payload["technical_quality"],
+            prominence=_read_prominence(payload, tags),
         )
     except Exception as exc:
         raise ContentUnderstandingError(
