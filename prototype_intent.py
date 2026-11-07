@@ -27,6 +27,7 @@ from user_goals import understand_user_goal
 from video_probe import probe_video
 from frame_sampler import FrameSampleError
 from visual_diversity import VisualDiversityError, fingerprint_window
+from shot_boundaries import ShotDetectionError, detect_hard_cuts
 
 
 MAX_VIDEOS = 3
@@ -87,6 +88,20 @@ def analyze_files(
         for item in metadata
     }
 
+    # Abrupte Schnitte aus dem Originalvideo erkennen, BEVOR die API bezahlt
+    # wird. Bei unklarer Erkennung kein Bildmotiv halluzinieren.
+    stage("Harte Bildwechsel erkennen")
+    shot_cuts = {}
+    shot_detection_unavailable = []
+    for item in metadata:
+        try:
+            shot_cuts[item.source_id] = detect_hard_cuts(
+                item.path, duration_seconds=item.duration_seconds
+            )
+        except ShotDetectionError:
+            shot_cuts[item.source_id] = ()
+            shot_detection_unavailable.append(item.source_id)
+
     # Nutzerwunsch unabhängig vom Videoinhalt interpretieren, anschließend
     # visuell prüfen. Kein Wunsch darf einen Bildbeleg ersetzen.
     stage("Nutzerwunsch verstehen")
@@ -124,6 +139,7 @@ def analyze_files(
             model=model,
             max_results=max_results,
             frame_caches=caches,
+            shot_cuts=shot_cuts,
         )
         if refine else None
     )
@@ -154,6 +170,10 @@ def analyze_files(
         "category_override": category_override,
         "notice": result.notice,
         "repeated_views_suppressed": result.repeated_views_suppressed,
+        "hard_cuts_detected": {
+            source_id: list(timestamps) for source_id, timestamps in shot_cuts.items()
+        },
+        "shot_detection_unavailable": shot_detection_unavailable,
         # Diagnosedaten: alle tatsächlich gesehenen Szenen, auch verworfene.
         # Damit lässt sich die Filterentscheidung ohne weitere API-Kosten prüfen.
         "observed_windows": [
@@ -192,6 +212,7 @@ def analyze_files(
             ],
             "notice": refinement.notice,
             "repeated_views_suppressed": refinement.repeated_views_suppressed,
+            "cut_crossing_windows_ignored": refinement.cut_crossing_windows_ignored,
             "suggestions": [
                 {
                     "source_id": scene.observation.window.source_id,
