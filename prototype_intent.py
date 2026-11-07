@@ -110,6 +110,7 @@ def analyze_files(
             "end_seconds": obs.window.end_seconds,
             "categories": list(obs.categories),
             "visual_tags": list(obs.visual_tags),
+            "prominence": dict(obs.prominence),
             "summary": obs.summary,
             "evidence": obs.evidence,
             "impact": obs.impact,
@@ -139,6 +140,7 @@ def analyze_files(
                 "end_seconds": ranked.observation.window.end_seconds,
                 "categories": list(ranked.observation.categories),
                 "visual_tags": list(ranked.observation.visual_tags),
+                "prominence": dict(ranked.observation.prominence),
                 "summary": ranked.observation.summary,
                 "reason": ranked.explanation,
                 "score": ranked.score,
@@ -171,6 +173,7 @@ def analyze_files(
                     "summary": scene.observation.summary,
                     "reason": scene.explanation,
                     "visual_tags": list(scene.observation.visual_tags),
+                    "prominence": dict(scene.observation.prominence),
                     "score": scene.score,
                 }
                 for scene in refinement.scenes
