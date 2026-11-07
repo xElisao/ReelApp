@@ -17,6 +17,8 @@ from batch_frames import FrameCache, select_cached_frames
 from content_understanding import SceneObservation, observe_window
 from intent_ranking import RankedScene, rank_for_goal
 from user_goals import EditingGoal
+from frame_sampler import FrameSampleError
+from visual_diversity import VisualDiversityError, fingerprint_window
 from video_probe import VideoMetadata
 
 
@@ -28,6 +30,7 @@ class RefinedResult:
     inspected_all_coarse_windows: bool
     notice: str | None
     observed_windows: tuple[SceneObservation, ...] = ()
+    repeated_views_suppressed: int = 0
 
 
 def fine_windows(
@@ -158,9 +161,20 @@ def refine_for_goal(
                 model=model, **options,
             )
         )
+    fingerprints = {}
+    if frame_caches is not None:
+        for obs in fine_observations:
+            try:
+                fingerprints[obs.window] = fingerprint_window(
+                    frame_caches[obs.window.source_id], obs.window
+                )
+            except (VisualDiversityError, FrameSampleError):
+                # Fehlschlag ist unbekannte Ansicht, kein Beweis für Duplikat.
+                continue
     ranked = rank_for_goal(
         fine_observations, goal, category_override=category_override,
         max_results=max_results,
+        scene_fingerprints=fingerprints if fingerprints else None,
     )
     complete = len(selected) == len(coarse_observations)
     notice = ranked.notice
@@ -183,4 +197,5 @@ def refine_for_goal(
         inspected_all_coarse_windows=complete,
         notice=notice,
         observed_windows=tuple(fine_observations),
+        repeated_views_suppressed=ranked.repeated_views_suppressed,
     )
