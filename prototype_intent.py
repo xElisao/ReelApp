@@ -15,6 +15,7 @@ import json
 import os
 from dataclasses import asdict
 from pathlib import Path
+from typing import Callable
 
 from adaptive_refinement import refine_for_goal
 from batch_frames import extract_frame_cache, select_cached_frames
@@ -42,8 +43,14 @@ def analyze_files(
     model: str = "gpt-4o-mini",
     max_results: int = 5,
     refine: bool = False,
+    progress: Callable[[str], None] | None = None,
 ) -> dict:
     """Führt alle Prototyp-Schritte mit strikten Kosten-/Dauerlimits aus."""
+    def stage(label: str) -> None:
+        if progress is not None:
+            progress(label)
+
+    stage("Technische Video-Prüfung")
     if not 1 <= len(video_paths) <= MAX_VIDEOS:
         raise ValueError(f"Bitte 1 bis {MAX_VIDEOS} Videos wählen.")
     if category_override is not None and category_override not in CONTENT_NICHES:
@@ -69,6 +76,7 @@ def analyze_files(
     if len(windows) > MAX_TOTAL_WINDOWS:
         raise ValueError("Zu viele Zeitfenster für den Prototyp. Videos kürzen.")
 
+    stage("Videobilder extrahieren")
     # Ein FFmpeg-Durchlauf pro Video statt erneuter Extraktion für jedes
     # grobe und detaillierte Zeitfenster. Maximal 60 s x 2 FPS = ca. 120 Frames.
     caches = {
@@ -81,7 +89,9 @@ def analyze_files(
 
     # Nutzerwunsch unabhängig vom Videoinhalt interpretieren, anschließend
     # visuell prüfen. Kein Wunsch darf einen Bildbeleg ersetzen.
+    stage("Nutzerwunsch verstehen")
     goal = understand_user_goal(client, instruction, model=model)
+    stage("Grobe Bildanalyse")
     observations = [
         observe_window(
             client, item, window, model=model,
@@ -104,6 +114,8 @@ def analyze_files(
         max_results=max_results,
         scene_fingerprints=fingerprints if fingerprints else None,
     )
+    if refine:
+        stage("Detaillierte Bildanalyse")
     refinement = (
         refine_for_goal(
             client, {item.source_id: item for item in metadata},
@@ -115,6 +127,7 @@ def analyze_files(
         )
         if refine else None
     )
+    stage("Analysebericht erstellen")
     def observation_record(obs):
         return {
             "source_id": obs.window.source_id,
