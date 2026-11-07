@@ -76,7 +76,7 @@ def _soften_background_requests(
                 before = sentence[max(0, mention.start() - 35):mention.start()]
                 # Ein klarer Ausschluss hat stets Vorrang.
                 if re.search(
-                    r"\\b(?:ohne|kein\\w*|niemals)\\s+(?:\\w+\\s+){0,2}$",
+                    r"\b(?:ohne|kein\w*|niemals)\s+(?:\w+\s+){0,2}$",
                     before,
                 ):
                     continue
