@@ -1,3 +1,5 @@
-fastapi
-uvicorn
-stripe
+# Nur das separate VeloCut-2.0-KI-Labor (staging_app.py).
+# Die alte Live-App und der Stripe-Webhook werden auf main unverändert betrieben.
+# Hier keine MoviePy/Pillow/NumPy-Altpins und kein FastAPI/Stripe nötig.
+streamlit>=1.40,<2
+openai>=1.30,<3

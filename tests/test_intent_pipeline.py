@@ -1,0 +1,192 @@
+"""Offline-Regressionstests der Content- und Intent-Pipeline."""
+
+import json
+import unittest
+from types import SimpleNamespace
+from unittest.mock import Mock
+
+from candidate_windows import CandidateWindow
+from content_understanding import (
+    ContentUnderstandingError, SceneObservation, detected_categories, observe_window,
+)
+from frame_sampler import SampledFrame
+from intent_ranking import rank_for_goal
+from user_goals import EditingGoal, GoalParsingError, understand_user_goal
+from video_probe import VideoMetadata
+
+
+def _client_response(data: dict):
+    client = Mock()
+    client.chat.completions.create.return_value = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(
+            content=json.dumps(data, ensure_ascii=False)
+        ))]
+    )
+    return client
+
+
+def _scene(start, end, cats, tags, *, impact=4.0):
+    return SceneObservation(
+        window=CandidateWindow("v1", start, end),
+        categories=tuple(cats), visual_tags=tuple(tags),
+        summary="Beobachtete Testszene",
+        evidence="Bilder zeigen die benannten Objekte",
+        impact=impact, technical_quality=4.0,
+    )
+
+
+class ContentTests(unittest.TestCase):
+    def setUp(self):
+        self.video = VideoMetadata(
+            source_id="v1", path="/tmp/video.mp4", duration_seconds=10,
+            width=1920, height=1080, fps=30, has_audio=False, video_codec="h264",
+        )
+
+    def test_vision_uses_real_frames_and_multiple_categories(self):
+        client = _client_response({
+            "categories": ["motorcycle_action", "travel_outdoor"],
+            "visual_tags": ["motorcycle", "mountains", "scenery"],
+            "summary": "Motorrad auf einer Bergstraße",
+            "evidence": "Motorrad und Bergkulisse sichtbar",
+            "impact": 4,
+            "technical_quality": 5,
+        })
+        scene = observe_window(
+            client, self.video, CandidateWindow("v1", 0, 8),
+            frames=[SampledFrame(2, b"\xff\xd8testjpeg\xff\xd9")],
+        )
+        self.assertEqual(scene.categories, ("motorcycle_action", "travel_outdoor"))
+        self.assertIn("mountains", scene.visual_tags)
+        items = client.chat.completions.create.call_args.kwargs["messages"][1]["content"]
+        self.assertTrue(any(i.get("type") == "image_url" for i in items))
+
+    def test_hallucinated_unknown_tag_is_rejected(self):
+        client = _client_response({
+            "categories": ["general"], "visual_tags": ["magical_unicorn"],
+            "summary": "Unbekannt", "evidence": "Kein Beleg",
+            "impact": 2, "technical_quality": 4,
+        })
+        with self.assertRaises(ContentUnderstandingError):
+            observe_window(
+                client, self.video, CandidateWindow("v1", 0, 8),
+                frames=[SampledFrame(2, b"frame")],
+            )
+
+    def test_auto_detected_categories_ordered_by_frequency(self):
+        scenes = [
+            _scene(0, 3, ("motorcycle_action", "travel_outdoor"), ("motorcycle",)),
+            _scene(4, 7, ("travel_outdoor",), ("mountains",)),
+        ]
+        self.assertEqual(detected_categories(scenes)[0], "travel_outdoor")
+
+
+class GoalTests(unittest.TestCase):
+    def test_plain_language_goal(self):
+        client = _client_response({
+            "style": "action", "focus_tags": ["cornering"],
+            "required_tags": [], "excluded_tags": [],
+            "uncheckable_requests": [],
+        })
+        goal = understand_user_goal(client, "Zeig die dynamischen Kurven")
+        self.assertEqual(goal.focus_tags, ("cornering",))
+        self.assertEqual(goal.original_instruction, "Zeig die dynamischen Kurven")
+
+    def test_explicit_wheelie_is_required(self):
+        client = _client_response({
+            "style": "action", "focus_tags": ["wheelie"],
+            "required_tags": ["wheelie"], "excluded_tags": [],
+            "uncheckable_requests": [],
+        })
+        goal = understand_user_goal(client, "Zeig den Wheelie")
+        self.assertEqual(goal.required_tags, ("wheelie",))
+
+    def test_empty_goal_is_balanced_without_api(self):
+        client = Mock()
+        goal = understand_user_goal(client, "")
+        self.assertEqual(goal.style, "balanced")
+        client.chat.completions.create.assert_not_called()
+
+    def test_invalid_tags_refused(self):
+        client = _client_response({
+            "style": "action", "focus_tags": ["unsupported"],
+            "required_tags": [], "excluded_tags": [],
+            "uncheckable_requests": [],
+        })
+        with self.assertRaises(GoalParsingError):
+            understand_user_goal(client, "Das nicht unterstützte Ding")
+
+
+class RankingTests(unittest.TestCase):
+    def setUp(self):
+        self.action = _scene(
+            0, 3, ("motorcycle_action",), ("motorcycle", "cornering"), impact=4,
+        )
+        self.scenic = _scene(
+            4, 7, ("travel_outdoor", "motorcycle_action"),
+            ("scenery", "mountains", "motorcycle"), impact=4,
+        )
+        self.scenes = [self.action, self.scenic]
+
+    def test_same_video_two_different_goals(self):
+        action = rank_for_goal(
+            self.scenes,
+            EditingGoal("Zeig Kurven", style="action", focus_tags=("cornering",)),
+        )
+        scenic = rank_for_goal(
+            self.scenes,
+            EditingGoal("Zeig Berge", style="scenic", focus_tags=("mountains",)),
+        )
+        self.assertEqual(action.ranked_scenes[0].observation, self.action)
+        self.assertEqual(scenic.ranked_scenes[0].observation, self.scenic)
+
+    def test_missing_wheelie_is_not_invented(self):
+        result = rank_for_goal(
+            self.scenes,
+            EditingGoal("Zeig den Wheelie", required_tags=("wheelie",)),
+        )
+        self.assertFalse(result.ranked_scenes)
+        self.assertIn("wheelie", result.notice)
+
+    def test_unknown_uncheckable_request_does_not_fake_match(self):
+        result = rank_for_goal(
+            self.scenes,
+            EditingGoal("Spezialereignis", uncheckable_requests=("Spezialereignis",)),
+        )
+        self.assertFalse(result.ranked_scenes)
+        self.assertIn("Spezialereignis", result.notice)
+
+    def test_user_category_override_is_respected(self):
+        result = rank_for_goal(
+            self.scenes, EditingGoal(""), category_override="travel_outdoor",
+        )
+        self.assertEqual(len(result.ranked_scenes), 1)
+        self.assertEqual(result.ranked_scenes[0].observation, self.scenic)
+
+    def test_exclusion(self):
+        result = rank_for_goal(
+            self.scenes,
+            EditingGoal("Ohne Berge", excluded_tags=("mountains",)),
+        )
+        self.assertEqual(len(result.ranked_scenes), 1)
+        self.assertEqual(result.ranked_scenes[0].observation, self.action)
+
+    def test_overlapping_windows_not_recommended_together(self):
+        other = _scene(
+            2, 5, ("motorcycle_action",), ("cornering",), impact=5,
+        )
+        result = rank_for_goal(
+            [self.action, other], EditingGoal(""),
+        )
+        self.assertEqual(len(result.ranked_scenes), 1)
+
+    def test_no_fitting_goal_returns_notice(self):
+        result = rank_for_goal(
+            self.scenes,
+            EditingGoal("Sonnenuntergang", focus_tags=("sunset",)),
+        )
+        self.assertFalse(result.ranked_scenes)
+        self.assertIn("Keine ausreichend", result.notice)
+
+
+if __name__ == "__main__":
+    unittest.main()
