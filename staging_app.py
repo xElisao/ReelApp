@@ -16,9 +16,10 @@ from pathlib import Path
 import streamlit as st
 
 from prototype_intent import analyze_files
+from preview_clips import PreviewError, render_report_previews
 
 
-LAB_BUILD = "Composition-Fix 1 | 2026-11-07"
+LAB_BUILD = "Preview-Lab 1 | 2026-11-07"
 
 
 st.set_page_config(
@@ -109,6 +110,49 @@ category_label = st.selectbox(
     "Erkannte Kategorie bei Bedarf überschreiben", list(options)
 )
 refine = st.checkbox("Interessante Stellen genauer untersuchen", value=True)
+preview_after_analysis = st.checkbox(
+    "Abspielbare Vorschau nach der Analyse erstellen",
+    value=True,
+    help="Kurze MP4-Vorschauen werden lokal erstellt. Dafür fallen keine "
+         "zusätzlichen KI-API-Aufrufe an.",
+)
+
+
+def _write_uploaded_videos(uploaded, directory: str) -> list[Path]:
+    if not uploaded or len(uploaded) > 3:
+        raise ValueError("Bitte 1 bis 3 Originalvideos hochladen.")
+    if (
+        any(item.size > 80 * 1024 * 1024 for item in uploaded)
+        or sum(item.size for item in uploaded) > 160 * 1024 * 1024
+    ):
+        raise ValueError("Maximal 80 MB pro Video und 160 MB insgesamt.")
+    result = []
+    for index, item in enumerate(uploaded, 1):
+        suffix = Path(item.name).suffix.lower()
+        if suffix not in {".mp4", ".mov", ".m4v", ".avi"}:
+            raise ValueError("Nicht erlaubtes Upload-Format.")
+        path = Path(directory) / f"video_{index}{suffix}"
+        path.write_bytes(item.getbuffer())
+        result.append(path)
+    return result
+
+
+def _remember_previews(clips, report_bytes: bytes) -> None:
+    """Keep only compressed short clips, never original uploaded videos."""
+    identifier = hashlib.sha256(report_bytes).hexdigest()[:16]
+    st.session_state["velocut_preview_id"] = identifier
+    st.session_state["velocut_preview_clips"] = [
+        {
+            "source_id": clip.source_id,
+            "start_seconds": clip.start_seconds,
+            "end_seconds": clip.end_seconds,
+            "score": clip.score,
+            "summary": clip.summary,
+            "mp4_bytes": clip.mp4_bytes,
+        }
+        for clip in clips
+    ]
+
 
 def _display(report: dict, *, show_refined: bool, download_key: str) -> None:
     st.subheader("Ergebnis dieser Analyse")
@@ -191,16 +235,9 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                 # Import erst hier: Wenn Secrets fehlen, keine API initialisieren.
                 from openai import OpenAI
 
+                preview_warning = None
                 with tempfile.TemporaryDirectory(prefix="velocut_staging_") as directory:
-                    paths = []
-                    for index, item in enumerate(uploads, 1):
-                        suffix = Path(item.name).suffix.lower()
-                        if suffix not in {".mp4", ".mov", ".m4v", ".avi"}:
-                            raise ValueError("Nicht erlaubtes Upload-Format.")
-                        target = Path(directory) / f"video_{index}{suffix}"
-                        target.write_bytes(item.getbuffer())
-                        paths.append(target)
-
+                    paths = _write_uploaded_videos(uploads, directory)
                     report = analyze_files(
                         OpenAI(api_key=api_key, timeout=60.0, max_retries=1),
                         paths,
@@ -208,6 +245,21 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                         category_override=options[category_label],
                         refine=refine,
                     )
+                    if preview_after_analysis:
+                        try:
+                            clips = render_report_previews(paths, report)
+                            report_bytes = json.dumps(
+                                report, sort_keys=True, ensure_ascii=False
+                            ).encode("utf-8")
+                            _remember_previews(clips, report_bytes)
+                        except PreviewError:
+                            preview_warning = (
+                                "Die KI-Analyse war erfolgreich, aber die "
+                                "Video-Vorschau konnte nicht gerendert werden."
+                            )
+                    else:
+                        st.session_state.pop("velocut_preview_clips", None)
+                        st.session_state.pop("velocut_preview_id", None)
 
                 history = st.session_state.get("velocut_lab_history", [])
                 history.append({
@@ -219,6 +271,8 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                 })
                 st.session_state["velocut_lab_history"] = history[-4:]
                 st.success("Analyse abgeschlossen. Prüfe die Ergebnisse unten.")
+                if preview_warning:
+                    st.warning(preview_warning)
             except Exception as exc:
                 # Keine internen Fehlermeldungen mit möglichen Pfaden/Details veröffentlichen.
                 st.error(
@@ -248,3 +302,102 @@ if history:
                 entry["report"], show_refined=entry["refined"],
                 download_key=str(index),
             )
+
+
+st.divider()
+st.subheader("🎞️ Szenen-Vorschau ohne neue KI-Analyse")
+st.caption(
+    "Du hast schon eine JSON-Auswertung? Lade dasselbe Originalvideo oben "
+    "noch einmal hoch und wähle hier die gespeicherte JSON-Datei. "
+    "Die Vorschau verwendet ausschließlich FFmpeg, keine OpenAI-API."
+)
+saved_report = st.file_uploader(
+    "Vorhandenes Analyseergebnis hochladen (.json oder .txt)",
+    type=["json", "txt"],
+    key="velocut_import_report",
+)
+same_video_confirmed = st.checkbox(
+    "Ich verwende genau dieselben Originalvideos wie bei der Analyse "
+    "(bei mehreren Dateien in derselben Reihenfolge).",
+    key="velocut_same_video_confirmed",
+)
+
+if st.button("🎞️ Vorschau aus gespeichertem Ergebnis erstellen", type="secondary"):
+    if not uploads:
+        st.error("Bitte zuerst das zugehörige Originalvideo oben hochladen.")
+    elif saved_report is None:
+        st.error("Bitte das gespeicherte JSON-Analyseergebnis auswählen.")
+    elif not same_video_confirmed:
+        st.error("Bitte bestätigen, dass die Originalvideos zur Analyse gehören.")
+    elif saved_report.size > 1024 * 1024:
+        st.error("Die JSON-Datei darf maximal 1 MB groß sein.")
+    else:
+        with st.spinner("Aus den bereits erkannten Zeiten werden kurze MP4-Clips erstellt ..."):
+            try:
+                report_bytes = saved_report.getvalue()
+                report = json.loads(report_bytes.decode("utf-8-sig"))
+                if not isinstance(report, dict) or not report.get("mode"):
+                    raise PreviewError("Dies ist kein VeloCut-Analysebericht.")
+                with tempfile.TemporaryDirectory(prefix="velocut_preview_") as directory:
+                    paths = _write_uploaded_videos(uploads, directory)
+                    clips = render_report_previews(paths, report)
+                _remember_previews(clips, report_bytes)
+                if clips:
+                    st.success(
+                        f"{len(clips)} Vorschauclip(s) erstellt. "
+                        "Du kannst sie jetzt direkt ansehen und bewerten."
+                    )
+                else:
+                    st.warning("Die JSON-Analyse enthält keine ausgewählten Highlights.")
+            except (ValueError, PreviewError, UnicodeError, json.JSONDecodeError) as exc:
+                st.error(
+                    f"Vorschau nicht möglich: {exc}"
+                )
+            except Exception as exc:
+                st.error(
+                    "Die Vorschau konnte nicht erstellt werden "
+                    f"({type(exc).__name__}). Bitte Streamlit-Protokolle prüfen."
+                )
+
+clips_to_show = st.session_state.get("velocut_preview_clips", [])
+preview_identifier = st.session_state.get("velocut_preview_id", "")
+if clips_to_show:
+    st.subheader("Deine abspielbaren Highlight-Vorschläge")
+    st.caption(
+        "Die Vorschau zeigt genau die ausgewählten Zeitfenster, noch "
+        "keine finalen Schnitte. Bewertungen bleiben in dieser Sitzung."
+    )
+    grades = []
+    for index, clip in enumerate(clips_to_show, 1):
+        st.markdown(
+            f"**Szene {index}: {clip['summary']}**  "
+            f"({clip['source_id']}, "
+            f"{clip['start_seconds']:.2f}–{clip['end_seconds']:.2f}s)"
+        )
+        st.video(clip["mp4_bytes"], format="video/mp4")
+        grade = st.radio(
+            f"Wie gut passt Szene {index} zu deinem Wunsch?",
+            ["Noch nicht bewertet", "Gut", "Nicht gut"],
+            horizontal=True,
+            key=f"velocut_grade_{preview_identifier}_{index}",
+        )
+        grades.append({
+            "source_id": clip["source_id"],
+            "start_seconds": clip["start_seconds"],
+            "end_seconds": clip["end_seconds"],
+            "ai_score": clip["score"],
+            "user_rating": grade,
+        })
+    feedback = {
+        "report_sha256_prefix": preview_identifier,
+        "rating_type": "human_review_of_ai_previews",
+        "ratings": grades,
+        "note": "Subjektive Benutzerbewertung. Kein Beweis für korrekte KI-Erkennung.",
+    }
+    st.download_button(
+        "Meine Szenenbewertungen herunterladen (JSON)",
+        data=json.dumps(feedback, ensure_ascii=False, indent=2).encode("utf-8"),
+        file_name="velocut_szenen_feedback.json",
+        mime="application/json",
+        key="velocut_feedback_download",
+    )
