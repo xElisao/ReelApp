@@ -19,6 +19,7 @@ from intent_ranking import RankedScene, rank_for_goal
 from user_goals import EditingGoal
 from frame_sampler import FrameSampleError
 from visual_diversity import VisualDiversityError, fingerprint_window
+from shot_boundaries import crosses_hard_cut
 from video_probe import VideoMetadata
 
 
@@ -31,6 +32,7 @@ class RefinedResult:
     notice: str | None
     observed_windows: tuple[SceneObservation, ...] = ()
     repeated_views_suppressed: int = 0
+    cut_crossing_windows_ignored: int = 0
 
 
 def fine_windows(
@@ -81,6 +83,7 @@ def refine_for_goal(
     max_fine_windows: int = 12,
     max_results: int = 5,
     frame_caches: Mapping[str, FrameCache] | None = None,
+    shot_cuts: Mapping[str, Sequence[float]] | None = None,
 ) -> RefinedResult:
     """Analysiert möglichst passende grobe Fenster in höherer zeitlicher Auflösung.
 
@@ -146,8 +149,19 @@ def refine_for_goal(
             "bitte grobe Fensterzahl oder Budget anpassen."
         )
 
+    # Keine KI-Anfrage für Fenster starten, die einen harten Bildwechsel
+    # innerhalb der Szene enthalten. Statt unpassende Einzelbilder zu mischen
+    # wird ein anderes vollständig zusammenhängendes Fenster bevorzugt.
+    safe_windows = [
+        window for window in expanded
+        if not crosses_hard_cut(
+            window.start_seconds, window.end_seconds,
+            shot_cuts.get(window.source_id, ()) if shot_cuts else (),
+        )
+    ]
+    cut_crossing_windows_ignored = len(expanded) - len(safe_windows)
     fine_observations = []
-    for window in expanded:
+    for window in safe_windows:
         options = {}
         if frame_caches is not None:
             if window.source_id not in frame_caches:
@@ -178,6 +192,13 @@ def refine_for_goal(
     )
     complete = len(selected) == len(coarse_observations)
     notice = ranked.notice
+    if cut_crossing_windows_ignored:
+        cut_notice = (
+            f"{cut_crossing_windows_ignored} Detail-Zeitfenster wegen eines "
+            "erkannten harten Bildwechsels innerhalb des Clips ausgelassen. "
+            "Die Schnittsuche ist eine lokale Heuristik."
+        )
+        notice = f"{notice} {cut_notice}" if notice else cut_notice
     if not complete:
         scope = (
             f"Detailanalyse beschränkt auf {len(selected)} von "
@@ -198,4 +219,5 @@ def refine_for_goal(
         notice=notice,
         observed_windows=tuple(fine_observations),
         repeated_views_suppressed=ranked.repeated_views_suppressed,
+        cut_crossing_windows_ignored=cut_crossing_windows_ignored,
     )
