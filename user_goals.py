@@ -3,12 +3,52 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from content_understanding import VISUAL_TAGS
 
 
 STYLES = frozenset({"action", "scenic", "informative", "emotional", "balanced"})
+
+# Kleine, bewusst konservative Wortliste für klar sichtbare Nutzerpräferenzen.
+# Das ist KEINE Erkennung von Videoereignissen – nur eine Absicherung gegen
+# die fehlerhafte Einstufung gewöhnlicher Nutzerwörter als "nicht prüfbar".
+_VISIBLE_FOCUS_PATTERNS = (
+    (r"\bmotorr(?:ad|äder|aeder)\w*", "motorcycle"),
+    (r"\bkurv\w*", "cornering"),
+    (r"\blandschaft\w*|\bpanorama\w*|\baussicht\w*", "scenery"),
+    (r"\bberge?\b|\bbergpanorama\w*", "mountains"),
+    (r"\bsonnenuntergang\w*", "sunset"),
+    (r"\bfitness\b|\bworkout\w*|\bgym\b", "fitness"),
+    (r"\btrainings?\b|\bübung\w*", "exercise"),
+)
+
+
+def _recover_obvious_visual_focus(
+    instruction: str, excluded_tags: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Gängige positive Motive als Fokustags erhalten, falls das Modell versagt.
+
+    Die Wörter werden NUR als Präferenzen interpretiert. Es wird niemals
+    behauptet, dass die entsprechenden Szenen im Video vorhanden sind.
+    """
+    result: list[str] = []
+    text = instruction.casefold()
+    for pattern, tag in _VISIBLE_FOCUS_PATTERNS:
+        if tag in excluded_tags:
+            continue
+        for match in re.finditer(pattern, text):
+            prefix = text[max(0, match.start() - 45):match.start()]
+            # Häufige Negationsformen: "keine Kurven", "ohne Motorräder".
+            negated = re.search(
+                r"\b(?:kein\w*|ohne|nicht|vermeid\w*|no)\s+(?:\w+\s+){0,2}$",
+                prefix,
+            )
+            if not negated and tag not in result:
+                result.append(tag)
+                break
+    return tuple(result)
 
 
 class GoalParsingError(RuntimeError):
@@ -72,6 +112,19 @@ def understand_user_goal(
         "verlangte Ereignisse oder Motive), excluded_tags (zu vermeidende Tags), "
         "uncheckable_requests (nicht mit diesem Tagvokabular überprüfbare "
         "inhaltliche Wünsche, als kurze deutsche Strings). "
+        "Nenne bei erkennbaren Motiven immer passende focus_tags; sie "
+        "beschreiben Nutzerpräferenzen und behaupten NICHT, dass das Video "
+        "diese Motive enthält. Ordne normale Wörter und Umschreibungen "
+        "passenden sichtbaren Tags zu. "
+        "Setze uncheckable_requests NUR für den Aspekt eines Wunsches, "
+        "der an statischen Bildern nicht prüfbar ist, etwa Motorengeräusch, "
+        "Geschwindigkeit oder eine exakte Bewegung zwischen zwei Bildern. "
+        "Nicht ganze Anweisungen pauschal als ungeprüft markieren, wenn "
+        "Motorräder, Kurven oder Landschaften sichtbar sein können. "
+        "Beispiel: 'Interessante Motorrad-Durchfahrten und dynamische Kurven, "
+        "Motorräder gut sichtbar' -> style='action', "
+        "focus_tags=['motorcycle','cornering'], required_tags=[], "
+        "uncheckable_requests=['exakter zeitlicher Ablauf der Durchfahrt']. "
         "Lass Tags lieber leer, wenn der Wunsch unklar ist. "
         "Markiere 'Zeig den Wheelie' als required_tags=['wheelie']; "
         "'Fokus auf Kurven' als focus_tags=['cornering']; "
@@ -106,12 +159,21 @@ def understand_user_goal(
             or any(not isinstance(item, str) or not 0 < len(item) <= 160 for item in wishes)
         ):
             raise ValueError("Ungültige Liste nicht prüfbarer Wünsche.")
+        focus_tags = _tags(payload, "focus_tags")
+        required_tags = _tags(payload, "required_tags")
+        excluded_tags = _tags(payload, "excluded_tags")
+        # Nur falls das Modell offensichtliche sichtbare Motive als
+        # ungeprüft einstuft: deren Bedeutung als weiches Ziel retten.
+        # Ausschlüsse und ausdrücklich verlangte Ereignisse werden nie verändert.
+        if not focus_tags and not required_tags:
+            focus_tags = _recover_obvious_visual_focus(instruction, excluded_tags)
+
         return EditingGoal(
             original_instruction=instruction,
             style=payload["style"],
-            focus_tags=_tags(payload, "focus_tags"),
-            required_tags=_tags(payload, "required_tags"),
-            excluded_tags=_tags(payload, "excluded_tags"),
+            focus_tags=focus_tags,
+            required_tags=required_tags,
+            excluded_tags=excluded_tags,
             uncheckable_requests=tuple(wishes),
         )
     except Exception as exc:
