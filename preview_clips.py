@@ -10,11 +10,17 @@ import math
 import shutil
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from video_probe import VideoMetadata, probe_video
+from batch_frames import extract_frame_cache
+from candidate_windows import CandidateWindow
+from frame_sampler import FrameSampleError
+from visual_diversity import (
+    VisualDiversityError, fingerprint_window, likely_same_camera_view,
+)
 
 
 MAX_PREVIEWS = 3
@@ -34,6 +40,7 @@ class PreviewClip:
     score: float | None
     summary: str
     mp4_bytes: bytes
+    similar_view_as: int | None = None
 
 
 def _number(value: object) -> bool:
@@ -180,4 +187,44 @@ def render_report_previews(
                 mp4_bytes=_render_mp4(metadata[source_id].path, start, end),
             )
         )
+    # Auch ältere JSON-Berichte lokal beurteilen, ohne KI neu aufzurufen.
+    # Anders als beim neuen Ranking werden Clips NICHT versteckt; der Nutzer
+    # soll die Vermutung über dieselbe Kameraperspektive überprüfen können.
+    goal = report.get("goal")
+    if (
+        isinstance(goal, dict) and goal.get("style") == "scenic"
+        and len(clips) > 1
+    ):
+        try:
+            caches = {}
+            signatures = []
+            for clip in clips:
+                if clip.source_id not in caches:
+                    source = metadata[clip.source_id]
+                    caches[clip.source_id] = extract_frame_cache(
+                        source.path, source_id=source.source_id,
+                        duration_seconds=source.duration_seconds,
+                    )
+                signatures.append(fingerprint_window(
+                    caches[clip.source_id],
+                    CandidateWindow(
+                        clip.source_id, clip.start_seconds, clip.end_seconds
+                    ),
+                ))
+            for index, clip in enumerate(clips):
+                for previous in range(index):
+                    if (
+                        clip.source_id == clips[previous].source_id
+                        and likely_same_camera_view(
+                            signatures[index], signatures[previous]
+                        )
+                    ):
+                        clips[index] = replace(
+                            clip, similar_view_as=previous + 1
+                        )
+                        break
+        except (FrameSampleError, VisualDiversityError, ValueError, OSError):
+            # Ein gescheiterter Bildvergleich ist KEIN Beleg für gleiche
+            # oder unterschiedliche Szenen. MP4-Preview bleibt nutzbar.
+            pass
     return clips
