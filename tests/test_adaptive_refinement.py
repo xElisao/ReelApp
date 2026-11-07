@@ -118,6 +118,30 @@ class RefineTests(unittest.TestCase):
         self.assertIn("beschränkt", result.notice)
 
     @patch("adaptive_refinement.observe_window")
+    def test_detected_hard_cut_keeps_frames_from_one_shot(self, observe):
+        observe.side_effect = (
+            lambda _client, _metadata, window, *, model:
+            _scene(window.start_seconds, window.end_seconds,
+                   ("scenery", "mountains"))
+        )
+        result = refine_for_goal(
+            object(), self.metadata, self.coarse,
+            EditingGoal("Landschaften", style="scenic",
+                        focus_tags=("scenery",)),
+            shot_cuts={"v1": (8.0,)},
+        )
+        self.assertGreater(result.cut_crossing_windows_ignored, 0)
+        self.assertGreater(result.inspected_windows, 0)
+        self.assertEqual(observe.call_count, result.inspected_windows)
+        self.assertIn("Bildwechsels", result.notice)
+        for obs in result.observed_windows:
+            self.assertFalse(
+                obs.window.start_seconds + 0.12 < 8
+                < obs.window.end_seconds - 0.12,
+                obs.window,
+            )
+
+    @patch("adaptive_refinement.observe_window")
     def test_budget_raises_before_any_model_call(self, observe):
         with self.assertRaisesRegex(ValueError, "Budget"):
             refine_for_goal(
