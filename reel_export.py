@@ -26,6 +26,9 @@ MAX_SEGMENT_BYTES = 10 * 1024 * 1024
 MAX_REEL_BYTES = 40 * 1024 * 1024
 BACKGROUND_MODES = frozenset({"blur", "black"})
 AUDIO_MODES = frozenset({"mute", "original"})
+TRANSITION_MODES = frozenset({"cut", "fade"})
+FADE_SECONDS = 0.5
+MIN_FADE_CLIP_SECONDS = 1.0
 
 
 class ReelExportError(RuntimeError):
@@ -89,6 +92,32 @@ def validate_reel_segments(segments: Sequence[ReelSegment]) -> float:
     return total
 
 
+def expected_reel_duration(
+    segments: Sequence[ReelSegment], *,
+    transition_mode: str = "cut",
+) -> float:
+    """Reellaufzeit mit ggf. überlappenden Szenenübergängen berechnen.
+
+    Weiche Übergänge überlagern 0,5 Sekunden der angrenzenden Clips;
+    sie fügen KEINE künstliche zusätzliche Zeit ein.
+    """
+    total = validate_reel_segments(segments)
+    if transition_mode not in TRANSITION_MODES:
+        raise ReelExportError("Unbekannter Übergangsmodus.")
+    if transition_mode == "fade":
+        if any(
+            segment.duration_seconds < MIN_FADE_CLIP_SECONDS - 1e-6
+            for segment in segments
+        ):
+            raise ReelExportError(
+                "Für eine weiche Überblendung muss jede Szene "
+                "mindestens 1,00 Sekunden lang sein. "
+                "Bitte die Szene verlängern oder direkten Schnitt wählen."
+            )
+        total -= FADE_SECONDS * (len(segments) - 1)
+    return total
+
+
 def _clip_has_audio(path: Path, *, timeout_seconds: int = 12) -> bool:
     """Prüfe die lokale Vorschau auf Audio, ohne Mediendaten nach außen zu senden."""
     ffprobe = shutil.which("ffprobe")
@@ -115,6 +144,7 @@ def render_test_reel(
     *,
     background_mode: str = "blur",
     audio_mode: str = "mute",
+    transition_mode: str = "cut",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -127,8 +157,10 @@ def render_test_reel(
     Es erfolgen weder Sprachanalyse noch zusätzliche OpenAI-Aufrufe.
     "blur" erhält das Originalmotiv mittig und füllt freie Flächen mit
     weichgezeichnetem Bildmaterial, "black" bietet den alten Letterbox-Modus.
+    "cut" verbindet direkt; "fade" überblendet je 0,5 Sekunden visuell
+    per xfade und bei Originalton synchron per acrossfade.
     """
-    validate_reel_segments(segments)
+    expected_reel_duration(segments, transition_mode=transition_mode)
     if background_mode not in BACKGROUND_MODES:
         raise ReelExportError("Unbekannter Hintergrundmodus.")
     if audio_mode not in AUDIO_MODES:
@@ -191,7 +223,8 @@ def render_test_reel(
                     f"[sharp{index}]",
                     f"[blur{index}][sharp{index}]"
                     "overlay=(W-w)/2:(H-h)/2:shortest=1,"
-                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
+                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS,"
+                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB"
                     f"[v{index}]",
                 ])
             else:
@@ -201,10 +234,47 @@ def render_test_reel(
                     "scale=540:960:force_original_aspect_ratio=decrease:"
                     "force_divisible_by=2,"
                     "pad=540:960:(ow-iw)/2:(oh-ih)/2:color=black,"
-                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
+                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS,"
+                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB"
                     f"[v{index}]"
                 )
-        if audio_mode == "original":
+        if transition_mode == "fade":
+            # Video- und Tonspuren überlappen jeweils FADE_SECONDS.
+            # Alle Videos haben dieselbe Canvas, 24 fps und AVTB.
+            # Die zweite xfade-Position bezieht sich auf die bereits
+            # um vorherige Blenden verkürzte Ergebnis-Zeitleiste.
+            current_video = "v0"
+            prefix_duration = segments[0].duration_seconds
+            for index in range(1, len(segments)):
+                offset = (
+                    prefix_duration - FADE_SECONDS * index
+                )
+                next_video = (
+                    "video" if index == len(segments) - 1
+                    else f"vf{index}"
+                )
+                graph.append(
+                    f"[{current_video}][v{index}]"
+                    f"xfade=transition=fade:duration={FADE_SECONDS:.6f}:"
+                    f"offset={offset:.6f}[{next_video}]"
+                )
+                current_video = next_video
+                prefix_duration += segments[index].duration_seconds
+
+            if audio_mode == "original":
+                current_audio = "a0"
+                for index in range(1, len(segments)):
+                    next_audio = (
+                        "audio" if index == len(segments) - 1
+                        else f"af{index}"
+                    )
+                    graph.append(
+                        f"[{current_audio}][a{index}]"
+                        f"acrossfade=d={FADE_SECONDS:.6f}:"
+                        f"c1=tri:c2=tri[{next_audio}]"
+                    )
+                    current_audio = next_audio
+        elif audio_mode == "original":
             graph.append(
                 "".join(
                     f"[v{i}][a{i}]" for i in range(len(segments))
