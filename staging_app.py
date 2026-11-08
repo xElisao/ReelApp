@@ -21,7 +21,7 @@ from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Reel-Export 1 | 2026-11-08"
+LAB_BUILD = "Reel-Design 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -530,8 +530,9 @@ if clips_to_show:
     st.caption(
         "Aus 2 bis 3 ausgewählten Vorschauclips entsteht ein gemeinsames "
         "9:16-Hochkantvideo (540 × 960 Pixel). Die ursprünglichen Bilder "
-        "bleiben vollständig sichtbar, gegebenenfalls mit schwarzen Balken. "
-        "Dieser erste Testexport ist OHNE Ton, Musik, Titel und Übergangseffekte. "
+        "bleiben vollständig sichtbar. Ein weichgezeichneter Hintergrund "
+        "ersetzt standardmäßig die schwarzen Balken. "
+        "Dieser Testexport ist OHNE Ton, Musik, Titel und Übergangseffekte. "
         "Es werden keine neuen OpenAI-Anfragen gesendet."
     )
     reel_order = st.radio(
@@ -539,6 +540,20 @@ if clips_to_show:
         ["Chronologisch", "KI-Rangfolge"],
         horizontal=True,
         key=f"velocut_reel_order_{preview_identifier}",
+    )
+    reel_background_label = st.radio(
+        "Darstellung im Hochformat",
+        ["Unscharfer Hintergrund (empfohlen)", "Schwarze Balken (klassisch)"],
+        horizontal=True,
+        key=f"velocut_reel_background_{preview_identifier}",
+        help=(
+            "Das Originalbild bleibt in beiden Varianten vollständig sichtbar. "
+            "Bei unscharfem Hintergrund wird der freie Raum mit einer "
+            "weichgezeichneten Version der Aufnahme gefüllt."
+        ),
+    )
+    reel_background_mode = (
+        "blur" if reel_background_label.startswith("Unscharfer") else "black"
     )
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
@@ -550,7 +565,7 @@ if clips_to_show:
     selected_numbers = [index for index, _ in selected_for_reel]
     reel_signature = hashlib.sha256(
         json.dumps(
-            [preview_identifier, reel_order, selected_numbers],
+            [preview_identifier, reel_order, reel_background_mode, selected_numbers],
             ensure_ascii=True,
         ).encode("utf-8")
     ).hexdigest()
@@ -581,7 +596,9 @@ if clips_to_show:
                     )
                     for _, clip in selected_for_reel
                 ]
-                output = render_test_reel(segments)
+                output = render_test_reel(
+                    segments, background_mode=reel_background_mode
+                )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
                 st.success(
@@ -604,7 +621,7 @@ if clips_to_show:
         st.download_button(
             "⬇️ Test-Reel als MP4 herunterladen",
             data=reel_bytes,
-            file_name="velocut_test_reel_9x16.mp4",
+            file_name=f"velocut_test_reel_9x16_{reel_background_mode}.mp4",
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
         )
