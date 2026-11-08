@@ -38,9 +38,10 @@ und Audio-Export 1 kann der Nutzer die vorgeschlagenen Highlight-Szenen
 - Für **geänderte Schnitte** verwendet das Testlabor das exakt
   gleiche hochgeladene Originalvideo (SHA-256-Abgleich der
   Upload-Dateien gegenüber dem Preview-Erstellungszeitpunkt).
-  Es hält **keine Originaldatei dauerhaft im Session-Speicher**;
-  die Originals liegen während des Renders nur in einem
-  temporären Verzeichnis.
+  Unser Editor speichert **keine zusätzliche dauerhafte Kopie**
+  der Originaldatei. Die Streamlit-Dateiupload-Komponente kann
+  hochgeladene Medien jedoch während der Sitzung im Speicher halten;
+  für das lokale Bearbeiten wird nur kurz eine temporäre Datei erzeugt.
 - Der lokale FFmpeg-Schnittdetektor `shot_boundaries.py` wird
   für geänderte Videos erneut ausgeführt. Wenn der gewählte
   Clip einen erkannten **harten Bildwechsel im Inneren** enthält,
