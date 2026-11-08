@@ -525,15 +525,15 @@ if clips_to_show:
             edited_start = start_col.number_input(
                 f"Szene {index}: Start (Sekunden)",
                 min_value=0.0, max_value=60.0, step=0.25,
-                value=round(float(clip["start_seconds"]), 2),
-                format="%.2f",
+                value=float(clip["start_seconds"]),
+                format="%.3f",
                 key=f"velocut_edit_start_{preview_identifier}_{index}",
             )
             edited_end = end_col.number_input(
                 f"Szene {index}: Ende (Sekunden)",
                 min_value=0.0, max_value=60.0, step=0.25,
-                value=round(float(clip["end_seconds"]), 2),
-                format="%.2f",
+                value=float(clip["end_seconds"]),
+                format="%.3f",
                 key=f"velocut_edit_end_{preview_identifier}_{index}",
             )
             edited_ranges[index] = (edited_start, edited_end)
