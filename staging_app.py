@@ -21,7 +21,7 @@ from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Reel-Design 1 | 2026-11-08"
+LAB_BUILD = "Audio-Export 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -532,8 +532,9 @@ if clips_to_show:
         "9:16-Hochkantvideo (540 × 960 Pixel). Die ursprünglichen Bilder "
         "bleiben vollständig sichtbar. Ein weichgezeichneter Hintergrund "
         "ersetzt standardmäßig die schwarzen Balken. "
-        "Dieser Testexport ist OHNE Ton, Musik, Titel und Übergangseffekte. "
-        "Es werden keine neuen OpenAI-Anfragen gesendet."
+        "Ohne Ton ist die Standardeinstellung; vorhandener Originalton "
+        "kann beim Export ausdrücklich eingeschaltet werden. "
+        "Keine zusätzliche KI-Analyse, Spracherkennung oder Musikeinblendung."
     )
     reel_order = st.radio(
         "Reihenfolge der Clips im Reel",
@@ -555,6 +556,26 @@ if clips_to_show:
     reel_background_mode = (
         "blur" if reel_background_label.startswith("Unscharfer") else "black"
     )
+    reel_audio_label = st.radio(
+        "Ton im fertigen Reel",
+        ["Ohne Ton (Standard)", "Originalton übernehmen"],
+        horizontal=True,
+        key=f"velocut_reel_audio_{preview_identifier}",
+        help=(
+            "Nur der bereits vorhandene Originalton der ausgewählten Clips "
+            "wird übernommen. Es findet keine Sprachanalyse statt. "
+            "Clips ohne Ton bleiben still."
+        ),
+    )
+    reel_audio_mode = (
+        "original" if reel_audio_label.startswith("Originalton") else "mute"
+    )
+    if reel_audio_mode == "original":
+        st.caption(
+            "Hinweis: Der Originalton kann Stimmen, Gespräche oder Musik "
+            "enthalten. Diese Testfunktion bitte zunächst nur mit "
+            "eigenen oder freigegebenen Aufnahmen verwenden."
+        )
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
             key=lambda pair: (
@@ -565,7 +586,10 @@ if clips_to_show:
     selected_numbers = [index for index, _ in selected_for_reel]
     reel_signature = hashlib.sha256(
         json.dumps(
-            [preview_identifier, reel_order, reel_background_mode, selected_numbers],
+            [
+                preview_identifier, reel_order, reel_background_mode,
+                reel_audio_mode, selected_numbers,
+            ],
             ensure_ascii=True,
         ).encode("utf-8")
     ).hexdigest()
@@ -597,7 +621,9 @@ if clips_to_show:
                     for _, clip in selected_for_reel
                 ]
                 output = render_test_reel(
-                    segments, background_mode=reel_background_mode
+                    segments,
+                    background_mode=reel_background_mode,
+                    audio_mode=reel_audio_mode,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -621,7 +647,10 @@ if clips_to_show:
         st.download_button(
             "⬇️ Test-Reel als MP4 herunterladen",
             data=reel_bytes,
-            file_name=f"velocut_test_reel_9x16_{reel_background_mode}.mp4",
+            file_name=(
+                f"velocut_test_reel_9x16_{reel_background_mode}_"
+                f"{reel_audio_mode}.mp4"
+            ),
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
         )
