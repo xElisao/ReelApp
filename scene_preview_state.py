@@ -31,7 +31,7 @@ def scene_signature(
             and not isinstance(v, bool) and math.isfinite(v)
             for v in (start_seconds, end_seconds)
         )
-        or start_seconds < 0 or end_seconds <= start_seconds
+        or start_seconds < 0 or end_seconds < 0
     ):
         raise PreviewStateError("Ungültige Szene für die Schnittvorschau.")
     return hashlib.sha256(
