@@ -71,6 +71,15 @@ class ReelExportValidationTests(unittest.TestCase):
                     segment("video-2", 0, 2),
                 ])
 
+    @patch("reel_export.subprocess.run")
+    def test_only_known_background_modes_allowed(self, run):
+        with self.assertRaisesRegex(ReelExportError, "Hintergrundmodus"):
+            render_test_reel([
+                segment("video-1", 0, 2),
+                segment("video-2", 0, 2),
+            ], background_mode="arbitrary_ffmpeg_expression")
+        run.assert_not_called()
+
     @patch("reel_export.shutil.which", return_value=None)
     def test_missing_ffmpeg_is_reported_without_openai(self, _):
         with self.assertRaisesRegex(ReelExportError, "FFmpeg"):
@@ -143,6 +152,40 @@ class ReelExportFFmpegTests(unittest.TestCase):
             self.assertEqual(videos[0]["codec_name"], "h264")
             self.assertEqual((videos[0]["width"], videos[0]["height"]), (540, 960))
             self.assertAlmostEqual(float(data["format"]["duration"]), 3.0, delta=0.15)
+
+            # Die breite rote 16:9-Aufnahme liegt scharf in der Mitte.
+            # Der neue Standard füllt die obere linke Ecke ebenfalls mit
+            # roten Bilddaten statt mit einem schwarzen Balken.
+            def sample_corner(file_path):
+                cmd = [
+                    shutil.which("ffmpeg"), "-hide_banner", "-nostdin",
+                    "-loglevel", "error", "-ss", "0.5",
+                    "-i", str(file_path), "-frames:v", "1",
+                    "-vf", "crop=2:2:0:0,format=rgb24",
+                    "-f", "rawvideo", "pipe:1",
+                ]
+                process = subprocess.run(
+                    cmd, capture_output=True, timeout=20, check=False,
+                )
+                self.assertEqual(process.returncode, 0, process.stderr)
+                self.assertGreaterEqual(len(process.stdout), 3)
+                return tuple(process.stdout[:3])
+
+            blurred_corner = sample_corner(output_path)
+            self.assertGreater(blurred_corner[0], 80, blurred_corner)
+            self.assertGreater(
+                blurred_corner[0], blurred_corner[1] + 60, blurred_corner
+            )
+
+            # Bisherige schwarze Balken bleiben bewusst optional.
+            letterboxed = render_test_reel([
+                segment("video-1", 0, 1.5, samples[0]),
+                segment("video-2", 0, 1.5, samples[1]),
+            ], background_mode="black")
+            old_path = folder / "letterbox.mp4"
+            old_path.write_bytes(letterboxed)
+            black_corner = sample_corner(old_path)
+            self.assertTrue(all(channel < 25 for channel in black_corner), black_corner)
 
 
 if __name__ == "__main__":
