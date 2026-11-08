@@ -17,11 +17,12 @@ import streamlit as st
 
 from prototype_intent import analyze_files
 from preview_clips import PreviewError, pick_suggestions, render_report_previews
+from manual_editor import ClipEdit, EditorError, prepare_edited_segments, validate_manual_edits
 from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Audio-Export 1 | 2026-11-08"
+LAB_BUILD = "Editor-Fix 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -162,10 +163,16 @@ if st.button("🔍 Video prüfen (ohne KI-Kosten)"):
             )
 
 
-def _remember_previews(clips, report_bytes: bytes) -> None:
-    """Keep only compressed short clips, never original uploaded videos."""
-    identifier = hashlib.sha256(report_bytes).hexdigest()[:16]
+def _remember_previews(clips, report_bytes: bytes, uploaded) -> None:
+    """Nur komprimierte Clips und Upload-Hashwerte, niemals Originaldateien sichern."""
+    source_hashes = tuple(
+        hashlib.sha256(item.getbuffer()).hexdigest() for item in uploaded
+    )
+    identifier = hashlib.sha256(
+        report_bytes + ("|".join(source_hashes)).encode("ascii")
+    ).hexdigest()[:16]
     st.session_state["velocut_preview_id"] = identifier
+    st.session_state["velocut_preview_source_hashes"] = source_hashes
     # Ein alter Export darf nach neuen Vorschaudaten nicht abrufbar bleiben.
     st.session_state.pop("velocut_reel_bytes", None)
     st.session_state.pop("velocut_reel_signature", None)
@@ -326,7 +333,7 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                             report_bytes = json.dumps(
                                 report, sort_keys=True, ensure_ascii=False
                             ).encode("utf-8")
-                            _remember_previews(clips, report_bytes)
+                            _remember_previews(clips, report_bytes, uploads)
                         except Exception as exc:
                             # Fehler beim kostenfreien lokalen Rendering
                             # dürfen niemals die Analyseergebnisse verstecken.
@@ -338,6 +345,7 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                     else:
                         st.session_state.pop("velocut_preview_clips", None)
                         st.session_state.pop("velocut_preview_id", None)
+                        st.session_state.pop("velocut_preview_source_hashes", None)
                         st.session_state.pop("velocut_reel_bytes", None)
                         st.session_state.pop("velocut_reel_signature", None)
 
@@ -448,7 +456,7 @@ if st.button("🎞️ Vorschau aus gespeichertem Ergebnis erstellen", type="seco
                         "harter Bildwechsel mitten im Clip ausgelassen. "
                         "Dafür wird keine neue KI-Analyse benötigt."
                     )
-                _remember_previews(clips, report_bytes)
+                _remember_previews(clips, report_bytes, uploads)
                 if clips:
                     st.success(
                         f"{len(clips)} Vorschauclip(s) erstellt. "
@@ -476,6 +484,7 @@ if clips_to_show:
     )
     grades = []
     selected_for_reel = []
+    edited_ranges = {}
     for index, clip in enumerate(clips_to_show, 1):
         st.markdown(
             f"**Szene {index}: {clip['summary']}**  "
@@ -503,6 +512,31 @@ if clips_to_show:
         )
         if include_in_reel:
             selected_for_reel.append((index, clip))
+        with st.expander(f"✂️ Szene {index} kürzen oder verlängern (optional)"):
+            st.caption(
+                f"KI-Vorschlag: {clip['start_seconds']:.2f}–"
+                f"{clip['end_seconds']:.2f} Sekunden. "
+                "Du kannst den Ausschnitt innerhalb des Originalvideos "
+                "ändern (0,25 bis 10 Sekunden pro Clip). "
+                "Harte Bildwechsel prüft VeloCut beim Export. "
+                "Die Einzelvorschau oben zeigt noch den ursprünglichen Clip."
+            )
+            start_col, end_col = st.columns(2)
+            edited_start = start_col.number_input(
+                f"Szene {index}: Start (Sekunden)",
+                min_value=0.0, max_value=60.0, step=0.25,
+                value=round(float(clip["start_seconds"]), 2),
+                format="%.2f",
+                key=f"velocut_edit_start_{preview_identifier}_{index}",
+            )
+            edited_end = end_col.number_input(
+                f"Szene {index}: Ende (Sekunden)",
+                min_value=0.0, max_value=60.0, step=0.25,
+                value=round(float(clip["end_seconds"]), 2),
+                format="%.2f",
+                key=f"velocut_edit_end_{preview_identifier}_{index}",
+            )
+            edited_ranges[index] = (edited_start, edited_end)
         grades.append({
             "source_id": clip["source_id"],
             "start_seconds": clip["start_seconds"],
@@ -528,7 +562,11 @@ if clips_to_show:
     st.divider()
     st.subheader("🎬 Test-Reel als MP4 erstellen")
     st.caption(
-        "Aus 2 bis 3 ausgewählten Vorschauclips entsteht ein gemeinsames "
+        "Du kannst Szenen oben im ✂️-Bereich kürzen oder verlängern "
+        "und unten ihre Reihenfolge festlegen. Geänderte Clips werden "
+        "erst beim Export aus dem gleichen Originalvideo neu ausgeschnitten. "
+        "Die KI-Beschreibungen beziehen sich auf die ursprünglichen Vorschläge. "
+        "Aus 2 bis 3 ausgewählten Szenen entsteht ein gemeinsames "
         "9:16-Hochkantvideo (540 × 960 Pixel). Die ursprünglichen Bilder "
         "bleiben vollständig sichtbar. Ein weichgezeichneter Hintergrund "
         "ersetzt standardmäßig die schwarzen Balken. "
@@ -538,7 +576,7 @@ if clips_to_show:
     )
     reel_order = st.radio(
         "Reihenfolge der Clips im Reel",
-        ["Chronologisch", "KI-Rangfolge"],
+        ["Chronologisch", "KI-Rangfolge", "Manuell"],
         horizontal=True,
         key=f"velocut_reel_order_{preview_identifier}",
     )
@@ -576,50 +614,134 @@ if clips_to_show:
             "enthalten. Diese Testfunktion bitte zunächst nur mit "
             "eigenen oder freigegebenen Aufnahmen verwenden."
         )
+    order_valid = True
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
             key=lambda pair: (
-                pair[1]["source_id"], pair[1]["start_seconds"], pair[0]
+                pair[1]["source_id"], edited_ranges[pair[0]][0], pair[0]
             )
         )
+    elif reel_order == "Manuell" and selected_for_reel:
+        st.caption(
+            "Manuelle Reihenfolge: Wähle für jede Position eine andere Szene."
+        )
+        selectable = [number for number, _ in selected_for_reel]
+        choices = []
+        order_cols = st.columns(len(selectable))
+        for position, column in enumerate(order_cols, 1):
+            with column:
+                choice = st.selectbox(
+                    f"Position {position}",
+                    options=selectable,
+                    index=position - 1,
+                    format_func=lambda number: f"Szene {number}",
+                    key=f"velocut_manual_order_{preview_identifier}_{position}",
+                )
+                choices.append(choice)
+        if len(set(choices)) != len(choices):
+            order_valid = False
+            st.error(
+                "Eine Szene wurde mehrfach ausgewählt. "
+                "Bitte jede Szene genau einmal in die Reihenfolge setzen."
+            )
+        else:
+            selection_by_number = dict(selected_for_reel)
+            selected_for_reel = [
+                (number, selection_by_number[number]) for number in choices
+            ]
 
-    selected_numbers = [index for index, _ in selected_for_reel]
+    edits_for_reel = [
+        ClipEdit(
+            source_id=clip["source_id"],
+            start_seconds=edited_ranges[number][0],
+            end_seconds=edited_ranges[number][1],
+            suggested_start=clip["start_seconds"],
+            suggested_end=clip["end_seconds"],
+            mp4_bytes=clip["mp4_bytes"],
+        )
+        for number, clip in selected_for_reel
+    ]
+    edit_error = None
+    if len(edits_for_reel) >= 2:
+        try:
+            validate_manual_edits(edits_for_reel)
+        except EditorError as exc:
+            edit_error = str(exc)
+            st.error(f"Schnittauswahl korrigieren: {exc}")
+
+    selected_edits_signature = [
+        (
+            number, round(edit.start_seconds, 4),
+            round(edit.end_seconds, 4),
+        )
+        for (number, _), edit in zip(selected_for_reel, edits_for_reel)
+    ]
     reel_signature = hashlib.sha256(
         json.dumps(
             [
                 preview_identifier, reel_order, reel_background_mode,
-                reel_audio_mode, selected_numbers,
+                reel_audio_mode, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
     ).hexdigest()
     if len(selected_for_reel) < 2:
         st.info("Für das Test-Reel bitte mindestens zwei Szenen auswählen.")
-    else:
+    elif not edit_error and order_valid:
         estimated_seconds = sum(
-            clip["end_seconds"] - clip["start_seconds"]
-            for _, clip in selected_for_reel
+            edit.end_seconds - edit.start_seconds
+            for edit in edits_for_reel
         )
         st.caption(
             f"Gewählt: {len(selected_for_reel)} Clips, "
-            f"zusammen ungefähr {estimated_seconds:.1f} Sekunden."
+            f"zusammen ungefähr {estimated_seconds:.2f} Sekunden."
         )
+        if any(edit.changed for edit in edits_for_reel):
+            st.caption(
+                "Geänderte Ausschnitte werden ohne KI-Aufruf aus den "
+                "ursprünglichen Uploads neu gerendert. Eine unerkannte "
+                "weiche Blende ist weiterhin möglich."
+            )
+
     if st.button(
         "🎬 Ausgewählte Clips zu einem Reel verbinden",
-        disabled=len(selected_for_reel) < 2,
+        disabled=(
+            len(selected_for_reel) < 2 or not order_valid
+            or edit_error is not None
+        ),
         key=f"velocut_reel_render_{preview_identifier}",
     ):
-        with st.spinner("Die Vorschauclips werden lokal zu einem MP4 zusammengesetzt ..."):
+        with st.spinner("Die ausgewählten Szenen werden lokal zu einem MP4 zusammengesetzt ..."):
             try:
-                segments = [
-                    ReelSegment(
-                        source_id=clip["source_id"],
-                        start_seconds=clip["start_seconds"],
-                        end_seconds=clip["end_seconds"],
-                        mp4_bytes=clip["mp4_bytes"],
+                if any(edit.changed for edit in edits_for_reel):
+                    stored_hashes = st.session_state.get(
+                        "velocut_preview_source_hashes"
                     )
-                    for _, clip in selected_for_reel
-                ]
+                    if (
+                        not uploads
+                        or stored_hashes is None
+                        or tuple(
+                            hashlib.sha256(item.getbuffer()).hexdigest()
+                            for item in uploads
+                        ) != tuple(stored_hashes)
+                    ):
+                        raise EditorError(
+                            "Die Originalvideos wurden seit der Vorschau "
+                            "ausgetauscht oder entfernt. Für neue Schnitte "
+                            "bitte die Vorschau mit den passenden Uploads "
+                            "nochmals erstellen."
+                        )
+                    with tempfile.TemporaryDirectory(
+                        prefix="velocut_edit_"
+                    ) as directory:
+                        original_paths = _write_uploaded_videos(
+                            uploads, directory
+                        )
+                        segments = prepare_edited_segments(
+                            edits_for_reel, original_paths
+                        )
+                else:
+                    segments = prepare_edited_segments(edits_for_reel)
                 output = render_test_reel(
                     segments,
                     background_mode=reel_background_mode,
@@ -630,7 +752,7 @@ if clips_to_show:
                 st.success(
                     "Test-Reel erstellt. Du kannst es unten ansehen und herunterladen."
                 )
-            except ReelExportError as exc:
+            except (ReelExportError, EditorError) as exc:
                 st.error(f"Reel-Export nicht möglich: {exc}")
             except Exception as exc:
                 st.error(
