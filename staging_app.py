@@ -17,10 +17,11 @@ import streamlit as st
 
 from prototype_intent import analyze_files
 from preview_clips import PreviewError, pick_suggestions, render_report_previews
+from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Shot-Fix 1 | 2026-11-07"
+LAB_BUILD = "Reel-Export 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -165,6 +166,9 @@ def _remember_previews(clips, report_bytes: bytes) -> None:
     """Keep only compressed short clips, never original uploaded videos."""
     identifier = hashlib.sha256(report_bytes).hexdigest()[:16]
     st.session_state["velocut_preview_id"] = identifier
+    # Ein alter Export darf nach neuen Vorschaudaten nicht abrufbar bleiben.
+    st.session_state.pop("velocut_reel_bytes", None)
+    st.session_state.pop("velocut_reel_signature", None)
     st.session_state["velocut_preview_clips"] = [
         {
             "source_id": clip.source_id,
@@ -334,6 +338,8 @@ if st.button("🤖 Inhalt und Wunsch analysieren", type="primary"):
                     else:
                         st.session_state.pop("velocut_preview_clips", None)
                         st.session_state.pop("velocut_preview_id", None)
+                        st.session_state.pop("velocut_reel_bytes", None)
+                        st.session_state.pop("velocut_reel_signature", None)
 
                 if preview_warning:
                     st.warning(preview_warning)
@@ -469,6 +475,7 @@ if clips_to_show:
         "keine finalen Schnitte. Bewertungen bleiben in dieser Sitzung."
     )
     grades = []
+    selected_for_reel = []
     for index, clip in enumerate(clips_to_show, 1):
         st.markdown(
             f"**Szene {index}: {clip['summary']}**  "
@@ -489,6 +496,13 @@ if clips_to_show:
             horizontal=True,
             key=f"velocut_grade_{preview_identifier}_{index}",
         )
+        include_in_reel = st.checkbox(
+            f"Szene {index} ins Test-Reel aufnehmen",
+            value=True,
+            key=f"velocut_reel_clip_{preview_identifier}_{index}",
+        )
+        if include_in_reel:
+            selected_for_reel.append((index, clip))
         grades.append({
             "source_id": clip["source_id"],
             "start_seconds": clip["start_seconds"],
@@ -510,3 +524,87 @@ if clips_to_show:
         mime="application/json",
         key="velocut_feedback_download",
     )
+
+    st.divider()
+    st.subheader("🎬 Test-Reel als MP4 erstellen")
+    st.caption(
+        "Aus 2 bis 3 ausgewählten Vorschauclips entsteht ein gemeinsames "
+        "9:16-Hochkantvideo (540 × 960 Pixel). Die ursprünglichen Bilder "
+        "bleiben vollständig sichtbar, gegebenenfalls mit schwarzen Balken. "
+        "Dieser erste Testexport ist OHNE Ton, Musik, Titel und Übergangseffekte. "
+        "Es werden keine neuen OpenAI-Anfragen gesendet."
+    )
+    reel_order = st.radio(
+        "Reihenfolge der Clips im Reel",
+        ["Chronologisch", "KI-Rangfolge"],
+        horizontal=True,
+        key=f"velocut_reel_order_{preview_identifier}",
+    )
+    if reel_order == "Chronologisch":
+        selected_for_reel.sort(
+            key=lambda pair: (
+                pair[1]["source_id"], pair[1]["start_seconds"], pair[0]
+            )
+        )
+
+    selected_numbers = [index for index, _ in selected_for_reel]
+    reel_signature = hashlib.sha256(
+        json.dumps(
+            [preview_identifier, reel_order, selected_numbers],
+            ensure_ascii=True,
+        ).encode("utf-8")
+    ).hexdigest()
+    if len(selected_for_reel) < 2:
+        st.info("Für das Test-Reel bitte mindestens zwei Szenen auswählen.")
+    else:
+        estimated_seconds = sum(
+            clip["end_seconds"] - clip["start_seconds"]
+            for _, clip in selected_for_reel
+        )
+        st.caption(
+            f"Gewählt: {len(selected_for_reel)} Clips, "
+            f"zusammen ungefähr {estimated_seconds:.1f} Sekunden."
+        )
+    if st.button(
+        "🎬 Ausgewählte Clips zu einem Reel verbinden",
+        disabled=len(selected_for_reel) < 2,
+        key=f"velocut_reel_render_{preview_identifier}",
+    ):
+        with st.spinner("Die Vorschauclips werden lokal zu einem MP4 zusammengesetzt ..."):
+            try:
+                segments = [
+                    ReelSegment(
+                        source_id=clip["source_id"],
+                        start_seconds=clip["start_seconds"],
+                        end_seconds=clip["end_seconds"],
+                        mp4_bytes=clip["mp4_bytes"],
+                    )
+                    for _, clip in selected_for_reel
+                ]
+                output = render_test_reel(segments)
+                st.session_state["velocut_reel_bytes"] = output
+                st.session_state["velocut_reel_signature"] = reel_signature
+                st.success(
+                    "Test-Reel erstellt. Du kannst es unten ansehen und herunterladen."
+                )
+            except ReelExportError as exc:
+                st.error(f"Reel-Export nicht möglich: {exc}")
+            except Exception as exc:
+                st.error(
+                    "Reel-Export fehlgeschlagen "
+                    f"({type(exc).__name__}). Bitte geschützte Serverlogs prüfen."
+                )
+
+    if (
+        st.session_state.get("velocut_reel_signature") == reel_signature
+        and st.session_state.get("velocut_reel_bytes")
+    ):
+        reel_bytes = st.session_state["velocut_reel_bytes"]
+        st.video(reel_bytes, format="video/mp4")
+        st.download_button(
+            "⬇️ Test-Reel als MP4 herunterladen",
+            data=reel_bytes,
+            file_name="velocut_test_reel_9x16.mp4",
+            mime="video/mp4",
+            key=f"velocut_reel_download_{preview_identifier}",
+        )
