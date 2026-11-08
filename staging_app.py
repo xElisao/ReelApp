@@ -21,6 +21,10 @@ from manual_editor import (
     ClipEdit, EditorError, prepare_edited_segments,
     render_single_scene_preview, validate_manual_edits, validate_single_edit,
 )
+from scene_preview_state import (
+    expire_scene_preview, read_current_scene_preview,
+    scene_signature, store_scene_preview,
+)
 from timeline_frames import (
     TimelineError, render_storyboard, selected_slider_interval, timeline_bounds,
 )
@@ -29,7 +33,7 @@ from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Preview-Fix 1 | 2026-11-08"
+LAB_BUILD = "Preview-Fix 2 | 2026-11-08"
 
 
 st.set_page_config(
@@ -180,6 +184,11 @@ def _uploads_still_match_preview(uploaded) -> bool:
             for item in uploaded
         ) == tuple(expected)
     )
+
+
+def _scene_cut_changed(preview_key: str) -> None:
+    """Slider- oder Zahlenfeld-Änderung räumt alte Einzelvorschau sofort ab."""
+    expire_scene_preview(st.session_state, preview_key)
 
 
 def _remember_previews(clips, report_bytes: bytes, uploaded) -> None:
@@ -518,6 +527,11 @@ if clips_to_show:
             f"({clip['source_id']}, "
             f"{clip['start_seconds']:.2f}–{clip['end_seconds']:.2f}s)"
         )
+        st.caption(
+            f"Original-KI-Vorschau · Szene {index} · "
+            f"{clip['end_seconds'] - clip['start_seconds']:.2f} Sekunden "
+            "(bleibt unverändert)"
+        )
         st.video(clip["mp4_bytes"], format="video/mp4")
         if clip.get("similar_view_as") is not None:
             st.info(
@@ -540,6 +554,9 @@ if clips_to_show:
         if include_in_reel:
             selected_for_reel.append((index, clip))
         with st.expander(f"✂️ Szene {index} – Zeitleiste und Schnittpunkte"):
+            scene_preview_key = (
+                f"velocut_scene_cut_preview_{preview_identifier}_{index}"
+            )
             st.caption(
                 f"KI-Vorschlag: {clip['start_seconds']:.2f}–"
                 f"{clip['end_seconds']:.2f} Sekunden. "
@@ -635,6 +652,8 @@ if clips_to_show:
                     step=0.01,
                     format="%.2f s",
                     key=f"velocut_timeline_slider_{preview_identifier}_{index}",
+                    on_change=_scene_cut_changed,
+                    args=(scene_preview_key,),
                     help=(
                         "Ziehe die beiden Griffe unter den Bildern. "
                         "Maximal 10 Sekunden Länge. Harte Bildwechsel "
@@ -662,6 +681,8 @@ if clips_to_show:
                     value=float(clip["start_seconds"]),
                     format="%.3f",
                     key=f"velocut_edit_start_{preview_identifier}_{index}",
+                    on_change=_scene_cut_changed,
+                    args=(scene_preview_key,),
                 )
                 edited_end = end_col.number_input(
                     f"Szene {index}: Ende (Sekunden)",
@@ -669,6 +690,8 @@ if clips_to_show:
                     value=float(clip["end_seconds"]),
                     format="%.3f",
                     key=f"velocut_edit_end_{preview_identifier}_{index}",
+                    on_change=_scene_cut_changed,
+                    args=(scene_preview_key,),
                 )
             edited_ranges[index] = (edited_start, edited_end)
             scene_edit = ClipEdit(
@@ -679,25 +702,23 @@ if clips_to_show:
                 suggested_end=clip["end_seconds"],
                 mp4_bytes=clip["mp4_bytes"],
             )
-            scene_preview_key = (
-                f"velocut_scene_cut_preview_{preview_identifier}_{index}"
+            scene_preview_signature = scene_signature(
+                preview_identifier, index, clip["source_id"],
+                edited_start, edited_end,
             )
-            scene_preview_signature = hashlib.sha256(
-                json.dumps([
-                    preview_identifier, index, clip["source_id"],
-                    round(edited_start, 6), round(edited_end, 6),
-                ]).encode("utf-8")
-            ).hexdigest()
-            saved_scene_preview = st.session_state.get(scene_preview_key)
-            if saved_scene_preview is not None and (
-                saved_scene_preview.get("signature") != scene_preview_signature
-                or not _uploads_still_match_preview(uploads)
-            ):
-                st.session_state.pop(scene_preview_key, None)
-                saved_scene_preview = None
-                st.caption(
-                    "Die Schnittauswahl oder die Uploads haben sich geändert. "
-                    "Erstelle die Einzelvorschau mit dem aktuellen Ausschnitt erneut."
+            saved_scene_preview = read_current_scene_preview(
+                st.session_state, scene_preview_key,
+                scene_preview_signature,
+                uploads_match=_uploads_still_match_preview(uploads),
+            )
+            if st.session_state.get(f"{scene_preview_key}_outdated"):
+                st.warning(
+                    "Die vorherige bearbeitete Schnittvorschau ist nicht "
+                    "mehr aktuell und wurde entfernt. Der Videoplayer "
+                    "OBERHALB dieses ✂️-Editors zeigt weiterhin den "
+                    "ursprünglichen KI-Ausschnitt. Klicke unten auf "
+                    "„Bearbeitete Szene als Vorschau erstellen“, um "
+                    "den neuen Ausschnitt zu sehen."
                 )
 
             scene_preview_error = None
@@ -753,11 +774,11 @@ if clips_to_show:
                                 )
                         else:
                             single_bytes = render_single_scene_preview(scene_edit)
-                    saved_scene_preview = {
-                        "signature": scene_preview_signature,
-                        "mp4_bytes": single_bytes,
-                    }
-                    st.session_state[scene_preview_key] = saved_scene_preview
+                    store_scene_preview(
+                        st.session_state, scene_preview_key,
+                        scene_preview_signature, single_bytes,
+                    )
+                    saved_scene_preview = st.session_state[scene_preview_key]
                     st.success(
                         "Bearbeitete Szene bereit. "
                         "Sieh dir unten den tatsächlichen Schnitt an."
@@ -770,11 +791,12 @@ if clips_to_show:
                         f"({type(exc).__name__}). "
                         "Bitte geschützte Serverlogs prüfen."
                     )
-            if (
-                saved_scene_preview is not None
-                and saved_scene_preview.get("signature")
-                == scene_preview_signature
-            ):
+            if saved_scene_preview is not None:
+                st.markdown(
+                    f"**✅ Aktuelle BEARBEITETE Schnittvorschau "
+                    f"für Szene {index} · "
+                    f"{edited_end - edited_start:.2f} Sekunden**"
+                )
                 st.video(
                     saved_scene_preview["mp4_bytes"],
                     format="video/mp4",
