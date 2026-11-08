@@ -1,7 +1,8 @@
 """Erster lokaler MP4-Reel-Export aus bereits geprüften Vorschauclips.
 
 Die Clips bleiben temporär und in der aktuellen Streamlit-Sitzung.
-Hochkantformat (540x960), mit schwarzen Rändern statt ungewolltem Zuschnitt.
+Hochkantformat (540x960), standardmäßig mit weichgezeichnetem Bildhintergrund.
+Das vollständige Quellbild bleibt in der Mitte sichtbar; optionale schwarze Balken.
 Diese Laborversion exportiert bewusst OHNE Ton und ohne Musikrechte-/Audio-Mix.
 Es wird weder das Originalvideo noch die OpenAI-API erneut benötigt.
 """
@@ -22,6 +23,7 @@ MAX_SEGMENT_SECONDS = 10.0
 MAX_REEL_SECONDS = 30.0
 MAX_SEGMENT_BYTES = 10 * 1024 * 1024
 MAX_REEL_BYTES = 40 * 1024 * 1024
+BACKGROUND_MODES = frozenset({"blur", "black"})
 
 
 class ReelExportError(RuntimeError):
@@ -88,6 +90,7 @@ def validate_reel_segments(segments: Sequence[ReelSegment]) -> float:
 def render_test_reel(
     segments: Sequence[ReelSegment],
     *,
+    background_mode: str = "blur",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -95,8 +98,12 @@ def render_test_reel(
     Jedes Segment wird auf 540x960 / 24fps / SAR=1 normalisiert; unterschiedliche
     Originalauflösungen und Seitenverhältnisse sind damit zulässig.
     Das Ergebnis hat keine Audiospur (expliziter MVP-Umfang).
+    "blur" erhält das Originalmotiv mittig und füllt freie Flächen mit
+    weichgezeichnetem Bildmaterial, "black" bietet den alten Letterbox-Modus.
     """
     validate_reel_segments(segments)
+    if background_mode not in BACKGROUND_MODES:
+        raise ReelExportError("Unbekannter Hintergrundmodus.")
     if timeout_seconds <= 0:
         raise ReelExportError("Ungültiges Render-Zeitlimit.")
     ffmpeg = shutil.which("ffmpeg")
@@ -111,15 +118,38 @@ def render_test_reel(
             clip_path = target / f"clip_{index:02d}.mp4"
             clip_path.write_bytes(segment.mp4_bytes)
             cmd.extend(["-i", str(clip_path)])
-            graph.append(
-                f"[{index}:v:0]"
-                "fps=24,"
-                "scale=540:960:force_original_aspect_ratio=decrease:"
-                "force_divisible_by=2,"
-                "pad=540:960:(ow-iw)/2:(oh-ih)/2:color=black,"
-                "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
-                f"[v{index}]"
-            )
+            if background_mode == "blur":
+                # Eine einzige Videoquelle wird in Hintergrund und Vordergrund
+                # geteilt. Das Hintergrundbild füllt 9:16 aus (Crop nur HINTER
+                # dem Motiv); das scharfe Motiv selbst bleibt vollständig.
+                graph.extend([
+                    f"[{index}:v:0]fps=24,setsar=1,split=2[bg{index}][fg{index}]",
+                    f"[bg{index}]"
+                    "scale=540:960:force_original_aspect_ratio=increase,"
+                    "crop=540:960,"
+                    "boxblur=luma_radius=18:luma_power=2:"
+                    "chroma_radius=9:chroma_power=2,"
+                    "eq=brightness=-0.055:saturation=0.9"
+                    f"[blur{index}]",
+                    f"[fg{index}]"
+                    "scale=540:960:force_original_aspect_ratio=decrease:"
+                    "force_divisible_by=2,setsar=1"
+                    f"[sharp{index}]",
+                    f"[blur{index}][sharp{index}]"
+                    "overlay=(W-w)/2:(H-h)/2:shortest=1,"
+                    "format=yuv420p,setpts=PTS-STARTPTS"
+                    f"[v{index}]",
+                ])
+            else:
+                graph.append(
+                    f"[{index}:v:0]"
+                    "fps=24,"
+                    "scale=540:960:force_original_aspect_ratio=decrease:"
+                    "force_divisible_by=2,"
+                    "pad=540:960:(ow-iw)/2:(oh-ih)/2:color=black,"
+                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
+                    f"[v{index}]"
+                )
         graph.append(
             "".join(f"[v{i}]" for i in range(len(segments)))
             + f"concat=n={len(segments)}:v=1:a=0[video]"
