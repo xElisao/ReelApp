@@ -224,7 +224,7 @@ def render_test_reel(
                     f"[blur{index}][sharp{index}]"
                     "overlay=(W-w)/2:(H-h)/2:shortest=1,"
                     "setsar=1,format=yuv420p,setpts=PTS-STARTPTS,"
-                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB"
+                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB,fps=24"
                     f"[v{index}]",
                 ])
             else:
@@ -235,7 +235,7 @@ def render_test_reel(
                     "force_divisible_by=2,"
                     "pad=540:960:(ow-iw)/2:(oh-ih)/2:color=black,"
                     "setsar=1,format=yuv420p,setpts=PTS-STARTPTS,"
-                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB"
+                    f"trim=duration={segment.duration_seconds:.6f},settb=AVTB,fps=24"
                     f"[v{index}]"
                 )
         if transition_mode == "fade":
