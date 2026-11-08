@@ -137,7 +137,7 @@ def render_test_reel(
                     f"[sharp{index}]",
                     f"[blur{index}][sharp{index}]"
                     "overlay=(W-w)/2:(H-h)/2:shortest=1,"
-                    "format=yuv420p,setpts=PTS-STARTPTS"
+                    "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
                     f"[v{index}]",
                 ])
             else:
