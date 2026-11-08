@@ -112,3 +112,37 @@ bleiben Teil des gleichen GitHub-Actions-Workflows.
    den sichtbaren Unterschied vergleichen (ca. 6,0 s).
 7. Ein Browser-/Nutzer-Praxistest muss nach grüner CI noch
    eigens bestätigt werden.
+
+## Regression – FFmpeg 7 mit echten Landschaftsclips (Transition-Fix 2)
+
+Beim ersten manuellen Browser-Test am 08.11.2026 erschien
+**„Reel-Export nicht möglich: Die Vorschauclips konnten nicht zu einem MP4-Reel kombiniert werden.“**
+Der Fehler trat beim **weichen Übergang** auf.
+
+Die Reproduktion erfolgte mit dem echten 32-s-Landschaftstestvideo
+(`VeloCut_Landschaftstest_32s.mp4`), Szenen **10,5–13,5 s** und
+**19,5–22,5 s**, genau wie im Nutzer-Test.
+
+- FFmpeg **7.1.5**: Direkter Schnitt funktionierte; `xfade`
+  scheiterte bei Blur **und** schwarzen Balken.
+- Aussagekräftige Diagnose aus einem **lokalen** Debuglauf:
+  `The inputs needs to be a constant frame rate; current rate of 1/0 is invalid`.
+- Ursache: Der letzte Video-Filterabschnitt hinter `overlay`/
+  `settb` liefert nicht auf allen FFmpeg-Versionen CFR-Metadaten,
+  obwohl `fps=24` bereits **vorher** im Graphen steht.
+- **Fix:** In beiden Video-Normalisierungspfaden
+  `...,trim=duration=...,settb=AVTB,fps=24[vN]` verwenden.
+  Dadurch gelangen die Clips wieder mit explizit **konstanter
+  Bildrate** in `xfade`.
+- Lokal mit den **echten Landschaftsclips** unter FFmpeg 7.1.5
+  erfolgreich geprüft: **Blur + Überblendung**, **Schwarz + Überblendung**
+  sowie beide direkten Schnittvarianten erfolgreich. Das resultierende
+  Blur-Reel hatte **540×960, H.264, 24 fps, 5,500 s**.
+- Zusätzlich automatisierter Regressionstest:
+  `test_xfade_receives_explicit_constant_frame_rate_after_overlay`
+  prüft **beide** Filterpfade und die feste `fps=24`-Angabe
+  unmittelbar vor `xfade`.
+- Ein erneuter Streamlit-Browser-Test nach Deployment ist erforderlich.
+  Die Testversion heißt `Transition-Fix 2 | 2026-11-08`.
+
+Wie zuvor findet **keine neue KI-Analyse** statt; `main` bleibt unverändert.
