@@ -10,6 +10,7 @@ import unittest
 from array import array
 from pathlib import Path
 from unittest.mock import patch
+from subprocess import CompletedProcess
 
 from reel_export import (
     FADE_SECONDS, ReelExportError, ReelSegment,
@@ -102,6 +103,45 @@ class TransitionValidationTests(unittest.TestCase):
             expected_reel_duration(three, transition_mode="fade"), 8.0
         )
         self.assertAlmostEqual(FADE_SECONDS, 0.5)
+
+    def test_xfade_receives_explicit_constant_frame_rate_after_overlay(self):
+        """Regression: FFmpeg 7 refuses xfade when upstream overlay reports 1/0 FPS.
+
+        On some FFmpeg versions 'overlay' does not preserve CFR metadata,
+        even though the clip was normalized with fps=24 earlier in the graph.
+        The final fps filter must be AFTER overlay, trim and settb.
+        """
+        scenes = [
+            part("video-1", 10.5, 13.5),
+            part("video-1", 19.5, 22.5),
+        ]
+        for background in ("blur", "black"):
+            with self.subTest(background=background):
+                captured = []
+
+                def fake_ffmpeg(cmd, *, capture_output, check, timeout):
+                    captured.append(cmd)
+                    Path(cmd[-1]).write_bytes(FAKE_MP4)
+                    return CompletedProcess(cmd, 0, b"", b"")
+
+                with (
+                    patch("reel_export.shutil.which", return_value="/usr/bin/ffmpeg"),
+                    patch("reel_export.subprocess.run", side_effect=fake_ffmpeg),
+                ):
+                    result = render_test_reel(
+                        scenes, transition_mode="fade",
+                        background_mode=background,
+                    )
+                self.assertEqual(result, FAKE_MP4)
+                self.assertEqual(len(captured), 1)
+                cmd = captured[0]
+                graph = cmd[cmd.index("-filter_complex") + 1]
+                self.assertIn("settb=AVTB,fps=24[v0]", graph)
+                self.assertIn("settb=AVTB,fps=24[v1]", graph)
+                self.assertIn(
+                    "xfade=transition=fade:duration=0.500000:offset=2.500000",
+                    graph,
+                )
 
     def test_bad_transition_is_rejected_before_ffmpeg(self):
         segments = [part("video-1", 0, 2), part("video-2", 0, 2)]
