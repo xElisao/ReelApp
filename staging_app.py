@@ -35,7 +35,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Transition-Fix 1 | 2026-11-08"
+LAB_BUILD = "Transition-Fix 2 | 2026-11-08"
 
 
 st.set_page_config(
