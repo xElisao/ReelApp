@@ -44,28 +44,111 @@ class ClipEdit:
         )
 
 
+def validate_single_edit(item: ClipEdit) -> None:
+    """Einzelne Szenen prüfen, auch vor dem isolierten Vorschau-Rendern."""
+    if not isinstance(item, ClipEdit):
+        raise EditorError("Ungültige Szenenauswahl.")
+    vals = (
+        item.start_seconds, item.end_seconds,
+        item.suggested_start, item.suggested_end,
+    )
+    if any(
+        not isinstance(value, (float, int))
+        or isinstance(value, bool) or not math.isfinite(value)
+        for value in vals
+    ):
+        raise EditorError("Die Schnittzeiten müssen gültige Zahlen sein.")
+    if (
+        item.start_seconds < 0
+        or item.end_seconds - item.start_seconds < MIN_EDIT_SECONDS - 1e-6
+    ):
+        raise EditorError("Eine Szene muss mindestens 0,25 Sekunden lang sein.")
+    if item.end_seconds - item.start_seconds > 10.0 + 1e-6:
+        raise EditorError("Eine Szene darf höchstens 10 Sekunden lang sein.")
+    if item.end_seconds > MAX_SOURCE_SECONDS + 0.05:
+        raise EditorError("Der Ausschnitt liegt außerhalb des Originalvideo-Limits.")
+    if item.suggested_start < 0 or item.suggested_end <= item.suggested_start:
+        raise EditorError("Ungültiger Ausgangsclip.")
+    if not isinstance(item.source_id, str) or not item.source_id.strip():
+        raise EditorError("Dem Clip fehlt die Originalvideo-Quelle.")
+    if (
+        not isinstance(item.mp4_bytes, bytes)
+        or not 8 <= len(item.mp4_bytes) <= 10 * 1024 * 1024
+        or item.mp4_bytes[4:8] != b"ftyp"
+    ):
+        raise EditorError("Der ursprüngliche Vorschauclip ist kein gültiger MP4-Container.")
+
+
+def _render_checked_edit(
+    edit: ClipEdit, source_path: Path, *,
+    duration_seconds: float, shot_cuts: Sequence[float],
+) -> bytes:
+    """Identische Sicherheit beim Einzel-Preview und beim Reel-Export."""
+    if edit.end_seconds > duration_seconds + 0.05:
+        raise EditorError(
+            "Der manuelle Ausschnitt reicht über das Ende des Originalvideos."
+        )
+    if crosses_hard_cut(edit.start_seconds, edit.end_seconds, shot_cuts):
+        raise EditorError(
+            "Der neue Ausschnitt enthält einen erkannten harten "
+            "Bildwechsel. Bitte Start oder Ende anpassen."
+        )
+    try:
+        return _render_mp4(
+            source_path, edit.start_seconds,
+            min(edit.end_seconds, duration_seconds),
+        )
+    except PreviewError as exc:
+        raise EditorError(
+            "Der geänderte Videoausschnitt konnte nicht erstellt werden."
+        ) from exc
+
+
+def render_single_scene_preview(
+    edit: ClipEdit, original_path: Path | None = None,
+) -> bytes:
+    """Den tatsächlich geschnittenen Einzelclip lokal abspielbar machen.
+
+    Original-Hashvergleich erfolgt im Streamlit-Aufrufer vor dem Zugriff.
+    Ohne Änderung kann die bestehende geprüfte Vorschau direkt verwendet
+    werden. Mit Änderung: dieselben Shot-Grenzen wie beim Reel-Export.
+    """
+    validate_single_edit(edit)
+    if not edit.changed:
+        return edit.mp4_bytes
+    if original_path is None:
+        raise EditorError(
+            "Für eine neue Schnittvorschau bitte dasselbe Originalvideo hochladen."
+        )
+    try:
+        info = probe_video(original_path, source_id=edit.source_id)
+    except (VideoProbeError, ValueError, OSError) as exc:
+        raise EditorError("Das Originalvideo konnte nicht geprüft werden.") from exc
+    if info.duration_seconds > MAX_SOURCE_SECONDS:
+        raise EditorError("Originalvideos dürfen maximal 60 Sekunden lang sein.")
+    try:
+        shots = detect_hard_cuts(
+            info.path, duration_seconds=info.duration_seconds,
+        )
+    except (ShotDetectionError, ValueError, OSError) as exc:
+        raise EditorError(
+            "Die Schnittprüfung ist fehlgeschlagen. "
+            "Der geänderte Clip wurde nicht exportiert."
+        ) from exc
+    return _render_checked_edit(
+        edit, info.path,
+        duration_seconds=info.duration_seconds,
+        shot_cuts=shots,
+    )
+
+
 def validate_manual_edits(edits: Sequence[ClipEdit]) -> None:
     """Schnitte und Duplikate vor zeitaufwendiger Bearbeitung prüfen."""
     if not 2 <= len(edits) <= 3:
         raise EditorError("Bitte 2 bis 3 Szenen für das Reel auswählen.")
     segments = []
     for item in edits:
-        if not isinstance(item, ClipEdit):
-            raise EditorError("Ungültige Szenenauswahl.")
-        vals = (
-            item.start_seconds, item.end_seconds,
-            item.suggested_start, item.suggested_end,
-        )
-        if any(
-            not isinstance(value, (float, int))
-            or isinstance(value, bool) or not math.isfinite(value)
-            for value in vals
-        ):
-            raise EditorError("Die Schnittzeiten müssen gültige Zahlen sein.")
-        if item.start_seconds < 0 or item.end_seconds - item.start_seconds < MIN_EDIT_SECONDS - 1e-6:
-            raise EditorError("Eine Szene muss mindestens 0,25 Sekunden lang sein.")
-        if item.suggested_start < 0 or item.suggested_end <= item.suggested_start:
-            raise EditorError("Ungültiger Ausgangsclip.")
+        validate_single_edit(item)
         segments.append(
             ReelSegment(
                 source_id=item.source_id,
@@ -142,20 +225,11 @@ def prepare_edited_segments(
     for edit in edits:
         info = metadata[edit.source_id]
         if edit.changed:
-            if crosses_hard_cut(
-                edit.start_seconds, edit.end_seconds, cuts[edit.source_id],
-            ):
-                raise EditorError(
-                    "Der neue Ausschnitt enthält einen erkannten harten "
-                    "Bildwechsel. Bitte Start oder Ende anpassen."
-                )
-            try:
-                mp4_bytes = _render_mp4(
-                    info.path, edit.start_seconds,
-                    min(edit.end_seconds, info.duration_seconds),
-                )
-            except PreviewError as exc:
-                raise EditorError("Der geänderte Videoausschnitt konnte nicht erstellt werden.") from exc
+            mp4_bytes = _render_checked_edit(
+                edit, info.path,
+                duration_seconds=info.duration_seconds,
+                shot_cuts=cuts[edit.source_id],
+            )
         else:
             mp4_bytes = edit.mp4_bytes
         rendered.append(
