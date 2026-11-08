@@ -29,11 +29,13 @@ from timeline_frames import (
     TimelineError, render_storyboard, selected_slider_interval, timeline_bounds,
 )
 from video_probe import VideoProbeError, probe_video
-from reel_export import ReelExportError, ReelSegment, render_test_reel
+from reel_export import (
+    ReelExportError, ReelSegment, expected_reel_duration, render_test_reel,
+)
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Preview-Fix 2 | 2026-11-08"
+LAB_BUILD = "Transition-Fix 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -843,13 +845,31 @@ if clips_to_show:
         "ersetzt standardmäßig die schwarzen Balken. "
         "Ohne Ton ist die Standardeinstellung; vorhandener Originalton "
         "kann beim Export ausdrücklich eingeschaltet werden. "
-        "Keine zusätzliche KI-Analyse, Spracherkennung oder Musikeinblendung."
+        "Optional verbinden weiche 0,5-Sekunden-Überblendungen "
+        "die Szenen. Keine zusätzliche KI-Analyse, Spracherkennung "
+        "oder Musikeinblendung."
     )
     reel_order = st.radio(
         "Reihenfolge der Clips im Reel",
         ["Chronologisch", "KI-Rangfolge", "Manuell"],
         horizontal=True,
         key=f"velocut_reel_order_{preview_identifier}",
+    )
+    reel_transition_label = st.radio(
+        "Übergang zwischen den Szenen",
+        ["Direkter Schnitt (Standard)", "Weiche Überblendung (0,5 Sekunden)"],
+        horizontal=True,
+        key=f"velocut_reel_transition_{preview_identifier}",
+        help=(
+            "Direkter Schnitt: Szenen wechseln sofort. "
+            "Weiche Überblendung: Die letzten 0,5 Sekunden des "
+            "vorherigen Clips überlagern die ersten 0,5 Sekunden "
+            "des nächsten Clips. Jede ausgewählte Szene muss dafür "
+            "mindestens 1 Sekunde lang sein. Keine KI-Kosten."
+        ),
+    )
+    reel_transition_mode = (
+        "fade" if reel_transition_label.startswith("Weiche") else "cut"
     )
     reel_background_label = st.radio(
         "Darstellung im Hochformat",
@@ -936,7 +956,19 @@ if clips_to_show:
     if len(edits_for_reel) >= 2:
         try:
             validate_manual_edits(edits_for_reel)
-        except EditorError as exc:
+            preview_segments = [
+                ReelSegment(
+                    source_id=edit.source_id,
+                    start_seconds=edit.start_seconds,
+                    end_seconds=edit.end_seconds,
+                    mp4_bytes=edit.mp4_bytes,
+                )
+                for edit in edits_for_reel
+            ]
+            estimated_seconds = expected_reel_duration(
+                preview_segments, transition_mode=reel_transition_mode,
+            )
+        except (EditorError, ReelExportError) as exc:
             edit_error = str(exc)
             st.error(f"Schnittauswahl korrigieren: {exc}")
 
@@ -951,7 +983,7 @@ if clips_to_show:
         json.dumps(
             [
                 preview_identifier, reel_order, reel_background_mode,
-                reel_audio_mode, selected_edits_signature,
+                reel_audio_mode, reel_transition_mode, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -959,13 +991,10 @@ if clips_to_show:
     if len(selected_for_reel) < 2:
         st.info("Für das Test-Reel bitte mindestens zwei Szenen auswählen.")
     elif not edit_error and order_valid:
-        estimated_seconds = sum(
-            edit.end_seconds - edit.start_seconds
-            for edit in edits_for_reel
-        )
         st.caption(
             f"Gewählt: {len(selected_for_reel)} Clips, "
-            f"zusammen ungefähr {estimated_seconds:.2f} Sekunden."
+            f"Reel mit {reel_transition_label.lower()} "
+            f"ungefähr {estimated_seconds:.2f} Sekunden lang."
         )
         if any(edit.changed for edit in edits_for_reel):
             st.caption(
@@ -1007,6 +1036,7 @@ if clips_to_show:
                     segments,
                     background_mode=reel_background_mode,
                     audio_mode=reel_audio_mode,
+                    transition_mode=reel_transition_mode,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1032,7 +1062,7 @@ if clips_to_show:
             data=reel_bytes,
             file_name=(
                 f"velocut_test_reel_9x16_{reel_background_mode}_"
-                f"{reel_audio_mode}.mp4"
+                f"{reel_audio_mode}_{reel_transition_mode}.mp4"
             ),
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
