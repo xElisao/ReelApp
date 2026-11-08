@@ -1,4 +1,4 @@
-"""Tests für den kostenlosen, stummen 9:16-Test-Reel-Export."""
+"""Offline-Tests für 9:16-Test-Reels: stumm oder mit Originalton."""
 
 from __future__ import annotations
 
@@ -78,6 +78,15 @@ class ReelExportValidationTests(unittest.TestCase):
                 segment("video-1", 0, 2),
                 segment("video-2", 0, 2),
             ], background_mode="arbitrary_ffmpeg_expression")
+        run.assert_not_called()
+
+    @patch("reel_export.subprocess.run")
+    def test_audio_mode_is_explicitly_whitelisted(self, run):
+        with self.assertRaisesRegex(ReelExportError, "Tonmodus"):
+            render_test_reel([
+                segment("video-1", 0, 2),
+                segment("video-2", 0, 2),
+            ], audio_mode="automatically_guess_audio")
         run.assert_not_called()
 
     @patch("reel_export.shutil.which", return_value=None)
@@ -186,6 +195,141 @@ class ReelExportFFmpegTests(unittest.TestCase):
             old_path.write_bytes(letterboxed)
             black_corner = sample_corner(old_path)
             self.assertTrue(all(channel < 25 for channel in black_corner), black_corner)
+
+
+class ReelAudioFFmpegTests(unittest.TestCase):
+    @unittest.skipUnless(
+        shutil.which("ffmpeg") and shutil.which("ffprobe"),
+        "FFmpeg/ffprobe nicht installiert",
+    )
+    def test_original_audio_can_be_enabled_and_silent_clips_remain_in_place(self):
+        """Ein tonhaltiger Clip + ein stummer Clip dürfen nicht verrutschen."""
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            first = folder / "with_audio.mp4"
+            second = folder / "without_audio.mp4"
+            commands = [
+                [
+                    shutil.which("ffmpeg"), "-hide_banner", "-nostdin",
+                    "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", "color=c=red:s=160x90:r=24:d=1.5",
+                    "-f", "lavfi", "-i",
+                    "sine=frequency=450:sample_rate=48000:duration=1.5",
+                    "-t", "1.5", "-c:v", "mpeg4", "-q:v", "4",
+                    "-c:a", "aac", "-b:a", "96k", str(first),
+                ],
+                [
+                    shutil.which("ffmpeg"), "-hide_banner", "-nostdin",
+                    "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", "color=c=green:s=90x160:r=24:d=1.5",
+                    "-t", "1.5", "-an", "-c:v", "mpeg4",
+                    "-q:v", "4", str(second),
+                ],
+            ]
+            for cmd in commands:
+                generated = subprocess.run(
+                    cmd, capture_output=True, timeout=30, check=False,
+                )
+                self.assertEqual(generated.returncode, 0, generated.stderr)
+
+            clips = [
+                segment("video-1", 0, 1.5, first.read_bytes()),
+                segment("video-2", 0, 1.5, second.read_bytes()),
+            ]
+            with_sound = folder / "reel_with_sound.mp4"
+            with_sound.write_bytes(render_test_reel(clips, audio_mode="original"))
+            silent = folder / "reel_silent.mp4"
+            silent.write_bytes(render_test_reel(clips))  # default mute
+
+            def inspect(path):
+                probe = subprocess.run(
+                    [
+                        shutil.which("ffprobe"), "-v", "error",
+                        "-show_entries", "stream=codec_type,codec_name:"
+                        "format=duration", "-of", "json", str(path),
+                    ],
+                    capture_output=True, text=True, timeout=20, check=False,
+                )
+                self.assertEqual(probe.returncode, 0, probe.stderr)
+                return json.loads(probe.stdout)
+
+            soundtrack = inspect(with_sound)
+            silent_track = inspect(silent)
+            self.assertEqual(
+                [x["codec_type"] for x in soundtrack["streams"]],
+                ["video", "audio"],
+            )
+            self.assertEqual(
+                next(x for x in soundtrack["streams"]
+                     if x["codec_type"] == "audio")["codec_name"],
+                "aac",
+            )
+            self.assertAlmostEqual(
+                float(soundtrack["format"]["duration"]), 3.0, delta=0.15
+            )
+            self.assertFalse(
+                any(x["codec_type"] == "audio"
+                    for x in silent_track["streams"])
+            )
+
+            # Beim ersten Abschnitt muss ein Sinuston vorhanden sein,
+            # beim zweiten Abschnitt keine hörbaren Originaldaten.
+            def max_amplitude_at(timestamp):
+                decoded = subprocess.run(
+                    [
+                        shutil.which("ffmpeg"), "-hide_banner", "-nostdin",
+                        "-loglevel", "error",
+                        "-ss", str(timestamp), "-i", str(with_sound),
+                        "-t", "0.15", "-vn", "-ar", "48000", "-ac", "1",
+                        "-f", "s16le", "pipe:1",
+                    ],
+                    capture_output=True, timeout=20, check=False,
+                )
+                self.assertEqual(decoded.returncode, 0, decoded.stderr)
+                from array import array
+                values = array("h")
+                values.frombytes(decoded.stdout)
+                self.assertTrue(values)
+                return max(abs(value) for value in values)
+
+            self.assertGreater(max_amplitude_at(0.6), 800)
+            self.assertLess(max_amplitude_at(2.1), 100)
+
+    @unittest.skipUnless(
+        shutil.which("ffmpeg") and shutil.which("ffprobe"),
+        "FFmpeg/ffprobe nicht installiert",
+    )
+    def test_original_audio_mode_with_only_silent_clips_is_safe(self):
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            path = folder / "silent.mp4"
+            made = subprocess.run(
+                [
+                    shutil.which("ffmpeg"), "-hide_banner", "-nostdin",
+                    "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=24:d=1",
+                    "-c:v", "mpeg4", "-an", str(path),
+                ],
+                capture_output=True, timeout=30, check=False,
+            )
+            self.assertEqual(made.returncode, 0, made.stderr)
+            data = path.read_bytes()
+            output = render_test_reel([
+                segment("video-1", 0, 1, data),
+                segment("video-2", 0, 1, data),
+            ], audio_mode="original", background_mode="black")
+            result = folder / "both_silent.mp4"
+            result.write_bytes(output)
+            probe = subprocess.run(
+                [
+                    shutil.which("ffprobe"), "-v", "error",
+                    "-select_streams", "a", "-show_entries", "stream=codec_name",
+                    "-of", "csv=p=0", str(result),
+                ],
+                capture_output=True, text=True, timeout=20, check=False,
+            )
+            self.assertEqual(probe.returncode, 0, probe.stderr)
+            self.assertIn("aac", probe.stdout)
 
 
 if __name__ == "__main__":
