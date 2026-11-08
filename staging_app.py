@@ -18,11 +18,15 @@ import streamlit as st
 from prototype_intent import analyze_files
 from preview_clips import PreviewError, pick_suggestions, render_report_previews
 from manual_editor import ClipEdit, EditorError, prepare_edited_segments, validate_manual_edits
+from timeline_frames import (
+    TimelineError, render_storyboard, selected_slider_interval, timeline_bounds,
+)
+from video_probe import VideoProbeError, probe_video
 from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Editor-Fix 1 | 2026-11-08"
+LAB_BUILD = "Timeline-Fix 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -173,6 +177,10 @@ def _remember_previews(clips, report_bytes: bytes, uploaded) -> None:
     ).hexdigest()[:16]
     st.session_state["velocut_preview_id"] = identifier
     st.session_state["velocut_preview_source_hashes"] = source_hashes
+    # Alte Filmstreifen zu anderen Uploads nicht unnötig im Speicher halten.
+    for key in list(st.session_state):
+        if key.startswith("velocut_storyboard_") or key.startswith("velocut_timeline_slider_"):
+            st.session_state.pop(key, None)
     # Ein alter Export darf nach neuen Vorschaudaten nicht abrufbar bleiben.
     st.session_state.pop("velocut_reel_bytes", None)
     st.session_state.pop("velocut_reel_signature", None)
@@ -512,30 +520,136 @@ if clips_to_show:
         )
         if include_in_reel:
             selected_for_reel.append((index, clip))
-        with st.expander(f"✂️ Szene {index} kürzen oder verlängern (optional)"):
+        with st.expander(f"✂️ Szene {index} – Zeitleiste und Schnittpunkte"):
             st.caption(
                 f"KI-Vorschlag: {clip['start_seconds']:.2f}–"
                 f"{clip['end_seconds']:.2f} Sekunden. "
-                "Du kannst den Ausschnitt innerhalb des Originalvideos "
-                "ändern (0,25 bis 10 Sekunden pro Clip). "
-                "Harte Bildwechsel prüft VeloCut beim Export. "
-                "Die Einzelvorschau oben zeigt noch den ursprünglichen Clip."
+                "Wähle Start und Ende per Schieberegler (0,01 s Schritte). "
+                "Vorschaubilder zeigen den Bereich um die vorgeschlagene Szene. "
+                "Die Vorschau oben bleibt unverändert; erst beim Export "
+                "werden deine neuen Schnittpunkte angewendet."
             )
-            start_col, end_col = st.columns(2)
-            edited_start = start_col.number_input(
-                f"Szene {index}: Start (Sekunden)",
-                min_value=0.0, max_value=60.05, step=0.25,
-                value=float(clip["start_seconds"]),
-                format="%.3f",
-                key=f"velocut_edit_start_{preview_identifier}_{index}",
-            )
-            edited_end = end_col.number_input(
-                f"Szene {index}: Ende (Sekunden)",
-                min_value=0.0, max_value=60.05, step=0.25,
-                value=float(clip["end_seconds"]),
-                format="%.3f",
-                key=f"velocut_edit_end_{preview_identifier}_{index}",
-            )
+            storyboard_key = f"velocut_storyboard_{preview_identifier}_{index}"
+            board = st.session_state.get(storyboard_key)
+            if board is None and st.button(
+                f"🎞️ Vorschaubilder für Szene {index} laden (ohne KI)",
+                key=f"velocut_load_storyboard_{preview_identifier}_{index}",
+            ):
+                old_hashes = st.session_state.get("velocut_preview_source_hashes")
+                matching_uploads = (
+                    uploads and old_hashes
+                    and tuple(
+                        hashlib.sha256(item.getbuffer()).hexdigest()
+                        for item in uploads
+                    ) == tuple(old_hashes)
+                )
+                if not matching_uploads:
+                    st.error(
+                        "Bitte dieselben Originalvideos wie bei dieser Vorschau "
+                        "hochladen und die Vorschau gegebenenfalls neu erstellen."
+                    )
+                else:
+                    try:
+                        with st.spinner(
+                            "Sieben kleine Filmframes werden lokal erzeugt ..."
+                        ):
+                            with tempfile.TemporaryDirectory(
+                                prefix="velocut_storyboard_"
+                            ) as directory:
+                                originals = _write_uploaded_videos(
+                                    uploads, directory
+                                )
+                                source_number = int(
+                                    clip["source_id"].removeprefix("video-")
+                                )
+                                if not 1 <= source_number <= len(originals):
+                                    raise TimelineError(
+                                        "Quellvideo ist nicht vorhanden."
+                                    )
+                                source_path = originals[source_number - 1]
+                                metadata = probe_video(
+                                    source_path, source_id=clip["source_id"]
+                                )
+                                low, high = timeline_bounds(
+                                    clip["start_seconds"], clip["end_seconds"],
+                                    metadata.duration_seconds,
+                                )
+                                image_bytes = render_storyboard(
+                                    source_path, low=low, high=high,
+                                    duration_seconds=metadata.duration_seconds,
+                                )
+                        board = {
+                            "low": low, "high": high, "jpeg": image_bytes,
+                        }
+                        st.session_state[storyboard_key] = board
+                    except (TimelineError, VideoProbeError, ValueError) as exc:
+                        st.warning(f"Zeitleiste nicht verfügbar: {exc}")
+                    except Exception as exc:
+                        st.warning(
+                            "Zeitleiste konnte nicht erstellt werden "
+                            f"({type(exc).__name__}). "
+                            "Die genaue Sekundeneingabe bleibt möglich."
+                        )
+            if board is not None:
+                st.image(
+                    board["jpeg"],
+                    caption=(
+                        "Filmstreifen aus dem Originalvideo. "
+                        "Die Zeitangaben gelten im Originalvideo."
+                    ),
+                    use_container_width=True,
+                )
+                initial = (
+                    max(board["low"], min(
+                        board["high"], round(clip["start_seconds"], 2)
+                    )),
+                    max(board["low"], min(
+                        board["high"], round(clip["end_seconds"], 2)
+                    )),
+                )
+                chosen = st.slider(
+                    f"Szene {index}: Anfang und Ende verschieben",
+                    min_value=float(board["low"]),
+                    max_value=float(board["high"]),
+                    value=initial,
+                    step=0.01,
+                    format="%.2f s",
+                    key=f"velocut_timeline_slider_{preview_identifier}_{index}",
+                    help=(
+                        "Ziehe die beiden Griffe unter den Bildern. "
+                        "Maximal 10 Sekunden Länge. Harte Bildwechsel "
+                        "werden beim Export noch einmal geprüft."
+                    ),
+                )
+                edited_start, edited_end = selected_slider_interval(
+                    chosen,
+                    (clip["start_seconds"], clip["end_seconds"]),
+                )
+                st.caption(
+                    f"Gewählter Ausschnitt: {edited_start:.2f}–"
+                    f"{edited_end:.2f}s "
+                    f"({edited_end - edited_start:.2f}s)."
+                )
+            else:
+                st.caption(
+                    "Für die Bild-Zeitleiste oben auf „Vorschaubilder laden“ "
+                    "klicken. Bis dahin sind die bisherigen Sekundenfelder verfügbar."
+                )
+                start_col, end_col = st.columns(2)
+                edited_start = start_col.number_input(
+                    f"Szene {index}: Start (Sekunden)",
+                    min_value=0.0, max_value=60.05, step=0.25,
+                    value=float(clip["start_seconds"]),
+                    format="%.3f",
+                    key=f"velocut_edit_start_{preview_identifier}_{index}",
+                )
+                edited_end = end_col.number_input(
+                    f"Szene {index}: Ende (Sekunden)",
+                    min_value=0.0, max_value=60.05, step=0.25,
+                    value=float(clip["end_seconds"]),
+                    format="%.3f",
+                    key=f"velocut_edit_end_{preview_identifier}_{index}",
+                )
             edited_ranges[index] = (edited_start, edited_end)
         grades.append({
             "source_id": clip["source_id"],
@@ -562,8 +676,8 @@ if clips_to_show:
     st.divider()
     st.subheader("🎬 Test-Reel als MP4 erstellen")
     st.caption(
-        "Du kannst Szenen oben im ✂️-Bereich kürzen oder verlängern "
-        "und unten ihre Reihenfolge festlegen. Geänderte Clips werden "
+        "Du kannst Szenen oben über ✂️ und die Bild-Zeitleiste kürzen "
+        "oder verlängern und unten ihre Reihenfolge festlegen. Geänderte Clips werden "
         "erst beim Export aus dem gleichen Originalvideo neu ausgeschnitten. "
         "Die KI-Beschreibungen beziehen sich auf die ursprünglichen Vorschläge. "
         "Aus 2 bis 3 ausgewählten Szenen entsteht ein gemeinsames "
