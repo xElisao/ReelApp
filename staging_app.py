@@ -17,7 +17,10 @@ import streamlit as st
 
 from prototype_intent import analyze_files
 from preview_clips import PreviewError, pick_suggestions, render_report_previews
-from manual_editor import ClipEdit, EditorError, prepare_edited_segments, validate_manual_edits
+from manual_editor import (
+    ClipEdit, EditorError, prepare_edited_segments,
+    render_single_scene_preview, validate_manual_edits, validate_single_edit,
+)
 from timeline_frames import (
     TimelineError, render_storyboard, selected_slider_interval, timeline_bounds,
 )
@@ -26,7 +29,7 @@ from reel_export import ReelExportError, ReelSegment, render_test_reel
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Timeline-Fix 1 | 2026-11-08"
+LAB_BUILD = "Preview-Fix 1 | 2026-11-08"
 
 
 st.set_page_config(
@@ -167,6 +170,18 @@ if st.button("🔍 Video prüfen (ohne KI-Kosten)"):
             )
 
 
+def _uploads_still_match_preview(uploaded) -> bool:
+    """Eine lokal gerenderte Vorschau darf nicht aus fremden Uploads stammen."""
+    expected = st.session_state.get("velocut_preview_source_hashes")
+    return bool(
+        uploaded and expected
+        and tuple(
+            hashlib.sha256(item.getbuffer()).hexdigest()
+            for item in uploaded
+        ) == tuple(expected)
+    )
+
+
 def _remember_previews(clips, report_bytes: bytes, uploaded) -> None:
     """Nur komprimierte Clips und Upload-Hashwerte, niemals Originaldateien sichern."""
     source_hashes = tuple(
@@ -179,7 +194,11 @@ def _remember_previews(clips, report_bytes: bytes, uploaded) -> None:
     st.session_state["velocut_preview_source_hashes"] = source_hashes
     # Alte Filmstreifen zu anderen Uploads nicht unnötig im Speicher halten.
     for key in list(st.session_state):
-        if key.startswith("velocut_storyboard_") or key.startswith("velocut_timeline_slider_"):
+        if (
+            key.startswith("velocut_storyboard_")
+            or key.startswith("velocut_timeline_slider_")
+            or key.startswith("velocut_scene_cut_preview_")
+        ):
             st.session_state.pop(key, None)
     # Ein alter Export darf nach neuen Vorschaudaten nicht abrufbar bleiben.
     st.session_state.pop("velocut_reel_bytes", None)
@@ -526,8 +545,9 @@ if clips_to_show:
                 f"{clip['end_seconds']:.2f} Sekunden. "
                 "Wähle Start und Ende per Schieberegler (0,01 s Schritte). "
                 "Vorschaubilder zeigen den Bereich um die vorgeschlagene Szene. "
-                "Die Vorschau oben bleibt unverändert; erst beim Export "
-                "werden deine neuen Schnittpunkte angewendet."
+                "Die Vorschau oben zeigt den ursprünglichen KI-Ausschnitt. "
+                "Darunter kannst du deinen veränderten Ausschnitt einzeln "
+                "abspielen, bevor du das Reel exportierst."
             )
             storyboard_key = f"velocut_storyboard_{preview_identifier}_{index}"
             board = st.session_state.get(storyboard_key)
@@ -651,6 +671,120 @@ if clips_to_show:
                     key=f"velocut_edit_end_{preview_identifier}_{index}",
                 )
             edited_ranges[index] = (edited_start, edited_end)
+            scene_edit = ClipEdit(
+                source_id=clip["source_id"],
+                start_seconds=edited_start,
+                end_seconds=edited_end,
+                suggested_start=clip["start_seconds"],
+                suggested_end=clip["end_seconds"],
+                mp4_bytes=clip["mp4_bytes"],
+            )
+            scene_preview_key = (
+                f"velocut_scene_cut_preview_{preview_identifier}_{index}"
+            )
+            scene_preview_signature = hashlib.sha256(
+                json.dumps([
+                    preview_identifier, index, clip["source_id"],
+                    round(edited_start, 6), round(edited_end, 6),
+                ]).encode("utf-8")
+            ).hexdigest()
+            saved_scene_preview = st.session_state.get(scene_preview_key)
+            if saved_scene_preview is not None and (
+                saved_scene_preview.get("signature") != scene_preview_signature
+                or not _uploads_still_match_preview(uploads)
+            ):
+                st.session_state.pop(scene_preview_key, None)
+                saved_scene_preview = None
+                st.caption(
+                    "Die Schnittauswahl oder die Uploads haben sich geändert. "
+                    "Erstelle die Einzelvorschau mit dem aktuellen Ausschnitt erneut."
+                )
+
+            scene_preview_error = None
+            try:
+                validate_single_edit(scene_edit)
+            except EditorError as exc:
+                scene_preview_error = str(exc)
+                st.warning(f"Einzelvorschau noch nicht möglich: {exc}")
+            st.caption(
+                "Die Schnittvorschau verwendet nur FFmpeg, ohne KI-Kosten. "
+                "Sie zeigt den gewählten Ausschnitt mit vorhandenem "
+                "Originalton. Der endgültige Reel-Ton wird weiter unten gewählt."
+            )
+            if st.button(
+                f"▶️ Bearbeitete Szene {index} als Vorschau erstellen",
+                key=f"velocut_make_scene_preview_{preview_identifier}_{index}",
+                disabled=scene_preview_error is not None,
+            ):
+                try:
+                    if not _uploads_still_match_preview(uploads):
+                        raise EditorError(
+                            "Bitte dieselben Originalvideos wie bei der "
+                            "Vorschauerstellung hochladen. Die Dateien "
+                            "wurden entfernt oder ausgetauscht."
+                        )
+                    with st.spinner(
+                        "Der einzelne Ausschnitt wird lokal gerendert ..."
+                    ):
+                        if scene_edit.changed:
+                            with tempfile.TemporaryDirectory(
+                                prefix="velocut_single_scene_"
+                            ) as directory:
+                                originals = _write_uploaded_videos(
+                                    uploads, directory
+                                )
+                                source_id = scene_edit.source_id
+                                if not source_id.startswith("video-"):
+                                    raise EditorError(
+                                        "Ungültige Originalvideo-Quelle."
+                                    )
+                                try:
+                                    source_number = int(source_id[6:])
+                                except ValueError as exc:
+                                    raise EditorError(
+                                        "Ungültige Originalvideo-Quelle."
+                                    ) from exc
+                                if not 1 <= source_number <= len(originals):
+                                    raise EditorError(
+                                        "Originalvideo nicht verfügbar."
+                                    )
+                                single_bytes = render_single_scene_preview(
+                                    scene_edit, originals[source_number - 1]
+                                )
+                        else:
+                            single_bytes = render_single_scene_preview(scene_edit)
+                    saved_scene_preview = {
+                        "signature": scene_preview_signature,
+                        "mp4_bytes": single_bytes,
+                    }
+                    st.session_state[scene_preview_key] = saved_scene_preview
+                    st.success(
+                        "Bearbeitete Szene bereit. "
+                        "Sieh dir unten den tatsächlichen Schnitt an."
+                    )
+                except EditorError as exc:
+                    st.error(f"Schnittvorschau nicht möglich: {exc}")
+                except Exception as exc:
+                    st.error(
+                        "Einzelvorschau fehlgeschlagen "
+                        f"({type(exc).__name__}). "
+                        "Bitte geschützte Serverlogs prüfen."
+                    )
+            if (
+                saved_scene_preview is not None
+                and saved_scene_preview.get("signature")
+                == scene_preview_signature
+            ):
+                st.video(
+                    saved_scene_preview["mp4_bytes"],
+                    format="video/mp4",
+                )
+                st.caption(
+                    f"Das ist der bearbeitete Ausschnitt "
+                    f"({edited_end - edited_start:.2f} Sekunden). "
+                    "Er wird nicht automatisch in das Reel übernommen; "
+                    "deine aktuellen Schnittwerte gelten beim Reel-Export."
+                )
         grades.append({
             "source_id": clip["source_id"],
             "start_seconds": clip["start_seconds"],
@@ -677,8 +811,9 @@ if clips_to_show:
     st.subheader("🎬 Test-Reel als MP4 erstellen")
     st.caption(
         "Du kannst Szenen oben über ✂️ und die Bild-Zeitleiste kürzen "
-        "oder verlängern und unten ihre Reihenfolge festlegen. Geänderte Clips werden "
-        "erst beim Export aus dem gleichen Originalvideo neu ausgeschnitten. "
+        "oder verlängern, sie einzeln abspielen und unten ihre Reihenfolge "
+        "festlegen. Geänderte Clips werden beim Reel-Export aus dem "
+        "gleichen Originalvideo neu ausgeschnitten. "
         "Die KI-Beschreibungen beziehen sich auf die ursprünglichen Vorschläge. "
         "Aus 2 bis 3 ausgewählten Szenen entsteht ein gemeinsames "
         "9:16-Hochkantvideo (540 × 960 Pixel). Die ursprünglichen Bilder "
@@ -828,17 +963,7 @@ if clips_to_show:
         with st.spinner("Die ausgewählten Szenen werden lokal zu einem MP4 zusammengesetzt ..."):
             try:
                 if any(edit.changed for edit in edits_for_reel):
-                    stored_hashes = st.session_state.get(
-                        "velocut_preview_source_hashes"
-                    )
-                    if (
-                        not uploads
-                        or stored_hashes is None
-                        or tuple(
-                            hashlib.sha256(item.getbuffer()).hexdigest()
-                            for item in uploads
-                        ) != tuple(stored_hashes)
-                    ):
+                    if not _uploads_still_match_preview(uploads):
                         raise EditorError(
                             "Die Originalvideos wurden seit der Vorschau "
                             "ausgetauscht oder entfernt. Für neue Schnitte "
