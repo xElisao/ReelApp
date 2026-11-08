@@ -3,7 +3,8 @@
 Die Clips bleiben temporär und in der aktuellen Streamlit-Sitzung.
 Hochkantformat (540x960), standardmäßig mit weichgezeichnetem Bildhintergrund.
 Das vollständige Quellbild bleibt in der Mitte sichtbar; optionale schwarze Balken.
-Diese Laborversion exportiert bewusst OHNE Ton und ohne Musikrechte-/Audio-Mix.
+Diese Laborversion exportiert standardmäßig OHNE Ton; vorhandener Originalton
+kann beim Export ausdrücklich aktiviert werden. Keine Sprachanalyse/Musikmischung.
 Es wird weder das Originalvideo noch die OpenAI-API erneut benötigt.
 """
 
@@ -24,6 +25,7 @@ MAX_REEL_SECONDS = 30.0
 MAX_SEGMENT_BYTES = 10 * 1024 * 1024
 MAX_REEL_BYTES = 40 * 1024 * 1024
 BACKGROUND_MODES = frozenset({"blur", "black"})
+AUDIO_MODES = frozenset({"mute", "original"})
 
 
 class ReelExportError(RuntimeError):
@@ -87,23 +89,50 @@ def validate_reel_segments(segments: Sequence[ReelSegment]) -> float:
     return total
 
 
+def _clip_has_audio(path: Path, *, timeout_seconds: int = 12) -> bool:
+    """Prüfe die lokale Vorschau auf Audio, ohne Mediendaten nach außen zu senden."""
+    ffprobe = shutil.which("ffprobe")
+    if ffprobe is None:
+        raise ReelExportError("FFprobe fehlt auf dem Testserver.")
+    try:
+        result = subprocess.run(
+            [
+                ffprobe, "-v", "error", "-select_streams", "a:0",
+                "-show_entries", "stream=index", "-of", "csv=p=0",
+                str(path),
+            ],
+            capture_output=True, timeout=timeout_seconds, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise ReelExportError("Die Tonspur konnte nicht geprüft werden.") from exc
+    if result.returncode != 0:
+        raise ReelExportError("Die Tonspur konnte nicht geprüft werden.")
+    return bool(result.stdout.strip())
+
+
 def render_test_reel(
     segments: Sequence[ReelSegment],
     *,
     background_mode: str = "blur",
+    audio_mode: str = "mute",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
 
     Jedes Segment wird auf 540x960 / 24fps / SAR=1 normalisiert; unterschiedliche
     Originalauflösungen und Seitenverhältnisse sind damit zulässig.
-    Das Ergebnis hat keine Audiospur (expliziter MVP-Umfang).
+    Audio: standardmäßig stumm. Bei "original" wird die schon in der
+    Vorschau vorhandene Tonspur übernommen; stumme Clips erhalten an
+    gleicher Position lokal erzeugte Stille für einen stabilen Export.
+    Es erfolgen weder Sprachanalyse noch zusätzliche OpenAI-Aufrufe.
     "blur" erhält das Originalmotiv mittig und füllt freie Flächen mit
     weichgezeichnetem Bildmaterial, "black" bietet den alten Letterbox-Modus.
     """
     validate_reel_segments(segments)
     if background_mode not in BACKGROUND_MODES:
         raise ReelExportError("Unbekannter Hintergrundmodus.")
+    if audio_mode not in AUDIO_MODES:
+        raise ReelExportError("Unbekannter Tonmodus.")
     if timeout_seconds <= 0:
         raise ReelExportError("Ungültiges Render-Zeitlimit.")
     ffmpeg = shutil.which("ffmpeg")
@@ -118,6 +147,31 @@ def render_test_reel(
             clip_path = target / f"clip_{index:02d}.mp4"
             clip_path.write_bytes(segment.mp4_bytes)
             cmd.extend(["-i", str(clip_path)])
+            if audio_mode == "original":
+                segment_duration = f"{segment.duration_seconds:.6f}"
+                if _clip_has_audio(clip_path):
+                    # Einheitliches Format für die FFmpeg-Verkettung.
+                    # apad/atrim hält Audio exakt auf der Videolänge;
+                    # sehr kurze Tonspuren bleiben sonst nicht synchron.
+                    graph.append(
+                        f"[{index}:a:0]"
+                        "aresample=48000,"
+                        "aformat=sample_fmts=fltp:sample_rates=48000:"
+                        "channel_layouts=stereo,"
+                        "asetpts=PTS-STARTPTS,apad,"
+                        f"atrim=duration={segment_duration}"
+                        f"[a{index}]"
+                    )
+                else:
+                    # Gemischte Auswahl aus Clips mit und ohne Ton:
+                    # die stummen Teile dürfen nicht verschoben werden.
+                    graph.append(
+                        "anullsrc=r=48000:cl=stereo,"
+                        f"atrim=duration={segment_duration},"
+                        "aformat=sample_fmts=fltp:sample_rates=48000:"
+                        "channel_layouts=stereo,"
+                        f"asetpts=PTS-STARTPTS[a{index}]"
+                    )
             if background_mode == "blur":
                 # Eine einzige Videoquelle wird in Hintergrund und Vordergrund
                 # geteilt. Das Hintergrundbild füllt 9:16 aus (Crop nur HINTER
@@ -150,14 +204,30 @@ def render_test_reel(
                     "setsar=1,format=yuv420p,setpts=PTS-STARTPTS"
                     f"[v{index}]"
                 )
-        graph.append(
-            "".join(f"[v{i}]" for i in range(len(segments)))
-            + f"concat=n={len(segments)}:v=1:a=0[video]"
-        )
+        if audio_mode == "original":
+            graph.append(
+                "".join(
+                    f"[v{i}][a{i}]" for i in range(len(segments))
+                ) + f"concat=n={len(segments)}:v=1:a=1[video][audio]"
+            )
+        else:
+            graph.append(
+                "".join(f"[v{i}]" for i in range(len(segments)))
+                + f"concat=n={len(segments)}:v=1:a=0[video]"
+            )
         destination = target / "velocut_test_reel.mp4"
         cmd.extend([
             "-filter_complex", ";".join(graph),
-            "-map", "[video]", "-an",
+            "-map", "[video]",
+        ])
+        if audio_mode == "original":
+            cmd.extend([
+                "-map", "[audio]", "-c:a", "aac", "-b:a", "128k",
+                "-ar", "48000",
+            ])
+        else:
+            cmd.append("-an")
+        cmd.extend([
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "28",
             "-pix_fmt", "yuv420p", "-threads", "2",
             "-movflags", "+faststart", str(destination),
