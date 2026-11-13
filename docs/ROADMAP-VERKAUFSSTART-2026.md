@@ -58,11 +58,14 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   Leistungsversprechen und Verpflichtungen prüfen.
   **Abnahme:** klare Altbestands-/Migrationsentscheidung, keine
   unauthentifizierte fremde Kontenfreischaltung.
-- [ ] **P0-03 Marktgespräche:** 10 reale Gespräche mit der Startnische.
+- [ ] **P0-03 Marktgespräche (Interviewleitfaden vorbereitet, noch 0/10):** 10 reale Gespräche mit der Startnische.
   Typische Rohvideos, Post-Häufigkeit, vorhandene Tools, Schmerz,
   Zahlungsbereitschaft, Datenschutzbedenken erfragen.
   **Abnahme:** mindestens fünf passende Pilotkandidaten und
   klare Top-3-Aufgaben; kein vorab unterstellter Product-Market-Fit.
+  **Arbeitsmaterial:** [PHASE18-KUNDENVALIDIERUNG.md](PHASE18-KUNDENVALIDIERUNG.md)
+  (Fragen, Pilotkriterien, Datenschutzgrenze und unverbindliche Namensideen).
+
 - [ ] **P0-04 Hosting-Entscheidung:** Keine kommerzielle Verarbeitung
   personenbezogener Videos auf Streamlit **Community Cloud**; die
   Community-Cloud-Bedingungen untersagen personenbezogene Inhalte für
