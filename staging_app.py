@@ -35,7 +35,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Transition-Fix 2 | 2026-11-08"
+LAB_BUILD = "Transition-Fix 3 | 2026-11-13"
 
 
 st.set_page_config(
@@ -845,7 +845,7 @@ if clips_to_show:
         "ersetzt standardmäßig die schwarzen Balken. "
         "Ohne Ton ist die Standardeinstellung; vorhandener Originalton "
         "kann beim Export ausdrücklich eingeschaltet werden. "
-        "Optional verbinden weiche 0,5-Sekunden-Überblendungen "
+        "Optional verbinden weiche Überblendungen von 0,25 bis 1 Sekunde "
         "die Szenen. Keine zusätzliche KI-Analyse, Spracherkennung "
         "oder Musikeinblendung."
     )
@@ -857,20 +857,41 @@ if clips_to_show:
     )
     reel_transition_label = st.radio(
         "Übergang zwischen den Szenen",
-        ["Direkter Schnitt (Standard)", "Weiche Überblendung (0,5 Sekunden)"],
+        ["Direkter Schnitt (Standard)", "Weiche Überblendung"],
         horizontal=True,
         key=f"velocut_reel_transition_{preview_identifier}",
         help=(
             "Direkter Schnitt: Szenen wechseln sofort. "
-            "Weiche Überblendung: Die letzten 0,5 Sekunden des "
-            "vorherigen Clips überlagern die ersten 0,5 Sekunden "
-            "des nächsten Clips. Jede ausgewählte Szene muss dafür "
-            "mindestens 1 Sekunde lang sein. Keine KI-Kosten."
+            "Weiche Überblendung: Die letzten Bilder einer Szene "
+            "werden mit dem Anfang der nächsten Szene überlagert. "
+            "Es sind 0,25, 0,5 oder 1 Sekunde möglich, ohne KI-Kosten."
         ),
     )
     reel_transition_mode = (
         "fade" if reel_transition_label.startswith("Weiche") else "cut"
     )
+    reel_fade_duration = 0.5
+    if reel_transition_mode == "fade":
+        reel_fade_duration = st.selectbox(
+            "Dauer der weichen Überblendung",
+            options=[0.25, 0.5, 1.0],
+            index=1,
+            format_func=lambda value: (
+                f"{value:.2f}".replace(".", ",") + " Sekunden"
+            ),
+            key=f"velocut_reel_fade_duration_{preview_identifier}",
+            help=(
+                "0,25 s = kurzer Übergang, 0,5 s = Standard, "
+                "1,0 s = langsamer Übergang. "
+                "Jede ausgewählte Szene muss mindestens doppelt "
+                "so lang wie die Überblendung sein."
+            ),
+        )
+        st.caption(
+            f"Jede Szene muss mindestens {2 * reel_fade_duration:.2f} "
+            "Sekunden dauern. Die beiden Szenen überlappen sich beim "
+            "Übergang; das Reel wird entsprechend kürzer."
+        )
     reel_background_label = st.radio(
         "Darstellung im Hochformat",
         ["Unscharfer Hintergrund (empfohlen)", "Schwarze Balken (klassisch)"],
@@ -966,7 +987,9 @@ if clips_to_show:
                 for edit in edits_for_reel
             ]
             estimated_seconds = expected_reel_duration(
-                preview_segments, transition_mode=reel_transition_mode,
+                preview_segments,
+                transition_mode=reel_transition_mode,
+                fade_duration_seconds=reel_fade_duration,
             )
         except (EditorError, ReelExportError) as exc:
             edit_error = str(exc)
@@ -983,7 +1006,8 @@ if clips_to_show:
         json.dumps(
             [
                 preview_identifier, reel_order, reel_background_mode,
-                reel_audio_mode, reel_transition_mode, selected_edits_signature,
+                reel_audio_mode, reel_transition_mode,
+                reel_fade_duration, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -994,6 +1018,7 @@ if clips_to_show:
         st.caption(
             f"Gewählt: {len(selected_for_reel)} Clips, "
             f"Reel mit {reel_transition_label.lower()} "
+            f"{f'({reel_fade_duration:.2f} s)' if reel_transition_mode == 'fade' else ''} "
             f"ungefähr {estimated_seconds:.2f} Sekunden lang."
         )
         if any(edit.changed for edit in edits_for_reel):
@@ -1037,6 +1062,7 @@ if clips_to_show:
                     background_mode=reel_background_mode,
                     audio_mode=reel_audio_mode,
                     transition_mode=reel_transition_mode,
+                    fade_duration_seconds=reel_fade_duration,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1062,7 +1088,8 @@ if clips_to_show:
             data=reel_bytes,
             file_name=(
                 f"velocut_test_reel_9x16_{reel_background_mode}_"
-                f"{reel_audio_mode}_{reel_transition_mode}.mp4"
+                f"{reel_audio_mode}_{reel_transition_mode}"
+                f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}.mp4"
             ),
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
