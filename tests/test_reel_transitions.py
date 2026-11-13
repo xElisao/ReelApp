@@ -149,12 +149,12 @@ class TransitionValidationTests(unittest.TestCase):
                 fade_duration_seconds=0.25,
             ), 3.5
         )
-        with self.assertRaisesRegex(ReelExportError, "1.00 Sekunden"):
+        with self.assertRaisesRegex(ReelExportError, "1,00 Sekunden"):
             expected_reel_duration(
                 shorter, transition_mode="fade",
                 fade_duration_seconds=0.5,
             )
-        with self.assertRaisesRegex(ReelExportError, "2.00 Sekunden"):
+        with self.assertRaisesRegex(ReelExportError, "2,00 Sekunden"):
             expected_reel_duration(
                 [part("video-1", 0, 1.5), part("video-2", 0, 3)],
                 transition_mode="fade",
