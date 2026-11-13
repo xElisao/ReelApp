@@ -1,4 +1,4 @@
-"""Tests für harte Schnitte und weiche 0,5-s-Überblendungen ohne KI."""
+"""Tests für harte Schnitte und variabel lange Überblendungen ohne KI."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from unittest.mock import patch
 from subprocess import CompletedProcess
 
 from reel_export import (
-    FADE_SECONDS, ReelExportError, ReelSegment,
+    FADE_SECONDS, FADE_DURATIONS, ReelExportError, ReelSegment,
     expected_reel_duration, render_test_reel,
 )
 
@@ -103,6 +103,99 @@ class TransitionValidationTests(unittest.TestCase):
             expected_reel_duration(three, transition_mode="fade"), 8.0
         )
         self.assertAlmostEqual(FADE_SECONDS, 0.5)
+
+    def test_duration_options_apply_to_two_and_three_clips(self):
+        self.assertEqual(FADE_DURATIONS, frozenset({0.25, 0.5, 1.0}))
+        two = [part("video-1", 0, 3), part("video-2", 0, 3)]
+        three = two + [part("video-3", 0, 3)]
+        for fade_seconds in (0.25, 0.5, 1.0):
+            with self.subTest(fade_seconds=fade_seconds):
+                self.assertAlmostEqual(
+                    expected_reel_duration(
+                        two, transition_mode="fade",
+                        fade_duration_seconds=fade_seconds,
+                    ),
+                    6 - fade_seconds,
+                )
+                self.assertAlmostEqual(
+                    expected_reel_duration(
+                        three, transition_mode="fade",
+                        fade_duration_seconds=fade_seconds,
+                    ),
+                    9 - 2 * fade_seconds,
+                )
+        # Existing callers without a duration retain the old 0.5-s default.
+        self.assertAlmostEqual(
+            expected_reel_duration(two, transition_mode="fade"), 5.5
+        )
+
+    def test_duration_is_whitelisted_even_for_cut_mode(self):
+        two = [part("video-1", 0, 3), part("video-2", 0, 3)]
+        for bad in (-1, 0, 0.1, 0.6, 1.5, True, float("nan"), float("inf"), "1"):
+            with self.subTest(bad=bad):
+                with patch("reel_export.subprocess.run") as run:
+                    with self.assertRaisesRegex(ReelExportError, "Überblendungsdauer"):
+                        render_test_reel(
+                            two, transition_mode="fade",
+                            fade_duration_seconds=bad,
+                        )
+                    run.assert_not_called()
+
+    def test_minimum_scene_length_changes_with_fade_duration(self):
+        shorter = [part("video-1", 0, 0.75), part("video-2", 0, 3)]
+        self.assertAlmostEqual(
+            expected_reel_duration(
+                shorter, transition_mode="fade",
+                fade_duration_seconds=0.25,
+            ), 3.5
+        )
+        with self.assertRaisesRegex(ReelExportError, "1.00 Sekunden"):
+            expected_reel_duration(
+                shorter, transition_mode="fade",
+                fade_duration_seconds=0.5,
+            )
+        with self.assertRaisesRegex(ReelExportError, "2.00 Sekunden"):
+            expected_reel_duration(
+                [part("video-1", 0, 1.5), part("video-2", 0, 3)],
+                transition_mode="fade",
+                fade_duration_seconds=1.0,
+            )
+
+    def test_duration_passed_exactly_to_video_and_audio_filter_graph(self):
+        scenes = [
+            part("video-1", 0, 3),
+            part("video-2", 0, 3),
+            part("video-3", 0, 3),
+        ]
+        for duration in (0.25, 0.5, 1.0):
+            with self.subTest(duration=duration):
+                captured = []
+                def fake_ffmpeg(cmd, *, capture_output, check, timeout):
+                    captured.append(cmd)
+                    Path(cmd[-1]).write_bytes(FAKE_MP4)
+                    return CompletedProcess(cmd, 0, b"", b"")
+                with (
+                    patch("reel_export.shutil.which", return_value="/usr/bin/ffmpeg"),
+                    patch("reel_export._clip_has_audio", return_value=False),
+                    patch("reel_export.subprocess.run", side_effect=fake_ffmpeg),
+                ):
+                    render_test_reel(
+                        scenes, transition_mode="fade",
+                        fade_duration_seconds=duration,
+                        audio_mode="original",
+                    )
+                graph = captured[0][captured[0].index("-filter_complex") + 1]
+                self.assertIn(
+                    f"xfade=transition=fade:duration={duration:.6f}:"
+                    f"offset={3-duration:.6f}", graph,
+                )
+                self.assertIn(
+                    f"xfade=transition=fade:duration={duration:.6f}:"
+                    f"offset={6-2*duration:.6f}", graph,
+                )
+                self.assertEqual(
+                    graph.count(f"acrossfade=d={duration:.6f}:"), 2
+                )
 
     def test_xfade_receives_explicit_constant_frame_rate_after_overlay(self):
         """Regression: FFmpeg 7 refuses xfade when upstream overlay reports 1/0 FPS.
@@ -271,6 +364,72 @@ class TransitionFFmpegTests(unittest.TestCase):
             )
             self.assertGreater(audio_peak(result, 0.4), 800)
             self.assertLess(audio_peak(result, 2.0), 100)
+
+    def test_real_three_durations_video_and_audio_within_24fps(self):
+        """Test with real FFmpeg, not just a mocked filter expression."""
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            red = generate_clip(folder, 0, "red", duration=3, audio_hz=440)
+            green = generate_clip(folder, 1, "green", duration=3)
+            blue = generate_clip(folder, 2, "blue", duration=3)
+            two = [
+                part("video-1", 0, 3, red),
+                part("video-2", 0, 3, green),
+            ]
+            three = two + [part("video-3", 0, 3, blue)]
+            for duration in (0.25, 0.5, 1.0):
+                with self.subTest(duration=duration):
+                    target = folder / f"fade_{int(duration * 100)}.mp4"
+                    target.write_bytes(render_test_reel(
+                        two, transition_mode="fade",
+                        fade_duration_seconds=duration,
+                        audio_mode="original",
+                    ))
+                    info = inspect_mp4(target)
+                    self.assertAlmostEqual(
+                        float(info["format"]["duration"]),
+                        6 - duration, delta=0.08,
+                    )
+                    self.assertEqual(
+                        [item["codec_type"] for item in info["streams"]],
+                        ["video", "audio"],
+                    )
+                    start = sample_center_pixel(target, 0.5)
+                    mix = sample_center_pixel(target, 3-duration/2)
+                    end = sample_center_pixel(target, 5-duration)
+                    self.assertGreater(start[0], start[1] + 80, start)
+                    self.assertGreater(mix[0], 30, mix)
+                    self.assertGreater(mix[1], 20, mix)
+                    self.assertGreater(end[1], end[0] + 50, end)
+                    self.assertGreater(audio_peak(target, 0.5), 600)
+                    self.assertLess(audio_peak(target, 5-duration), 100)
+
+            # Three scenes need two successive fades, including 1-second
+            # transitions in a black letterbox layout.
+            for duration in (0.25, 1.0):
+                with self.subTest(three_scene_duration=duration):
+                    target = folder / f"three_{int(duration * 100)}.mp4"
+                    target.write_bytes(render_test_reel(
+                        three, transition_mode="fade",
+                        fade_duration_seconds=duration,
+                        background_mode="black",
+                    ))
+                    info = inspect_mp4(target)
+                    self.assertAlmostEqual(
+                        float(info["format"]["duration"]),
+                        9 - 2*duration, delta=0.08,
+                    )
+                    self.assertGreater(
+                        sample_center_pixel(target, 0.5)[0], 80
+                    )
+                    self.assertGreater(
+                        sample_center_pixel(target, 4.5-duration)[1], 50
+                    )
+                    self.assertGreater(
+                        sample_center_pixel(
+                            target, 8-2*duration
+                        )[2], 80
+                    )
 
     def test_two_silent_clips_with_original_audio_mode_fade_safely(self):
         with tempfile.TemporaryDirectory() as directory:
