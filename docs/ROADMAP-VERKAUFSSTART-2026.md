@@ -38,13 +38,20 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Phase 0 – Entscheidungen und Risikosperren (vor externem Bezahlen)
 
-- [ ] **P0-01 Marke/Name:** Aktives Open-Source-KI-Videoschnittprojekt
+- [ ] **P0-01 Marke/Name (Recherche begonnen 13.11.2026; Rechtsfreigabe ausständig):** Aktives Open-Source-KI-Videoschnittprojekt
   `open-ribbi/velocut` mit nahezu identischem Namen prüfen. Identische
   Schreibweise bedeutet noch nicht nachgewiesene Markenverletzung;
   Recherche in österreichischem Markenregister, TMview, EUIPO,
   Domains/Handelsnamen, ggf. juristische Freigabe oder neues Branding.
   **Abnahme:** eindeutiger Name mit dokumentierter Recherche; vor
   Logo, Anzeigen, Domainkauf, Markenanmeldung.
+  **Recherchenotiz 13.11.2026:** Identische Produktbezeichnung bei
+  `open-ribbi/velocut` bestätigt. Vorläufige Bewertung: hohe
+  praktische Verwechslungsgefahr; juristische Bewertung offen.
+  Amtliche Registerzugänge geprüft, aber keine abgeschlossene
+  Suchabfrage zu identischen/ähnlichen Marken. Noch **nicht abhaken**.
+  Arbeitsdokument: [PHASE17-NAME-MARKENRECHERCHE.md](PHASE17-NAME-MARKENRECHERCHE.md).
+
 - [ ] **P0-02 Zahlungsrisiko:** Altes einmaliges „unbegrenztes“ Angebot
   (14,99 €) und E-Mail-only-Login nicht als neue Verkaufsbasis verwenden.
   Vor weiteren echten Zahlungen aktuellen Checkout, Altbestellungen,
