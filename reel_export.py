@@ -122,10 +122,12 @@ def expected_reel_duration(
             segment.duration_seconds < min_seconds - 1e-6
             for segment in segments
         ):
+            fade_label = f"{fade_duration_seconds:.2f}".replace(".", ",")
+            minimum_label = f"{min_seconds:.2f}".replace(".", ",")
             raise ReelExportError(
                 "Für eine weiche Überblendung mit "
-                f"{fade_duration_seconds:.2f} Sekunden muss jede Szene "
-                f"mindestens {min_seconds:.2f} Sekunden lang sein. "
+                f"{fade_label} Sekunden muss jede Szene "
+                f"mindestens {minimum_label} Sekunden lang sein. "
                 "Bitte die Szene verlängern oder direkten Schnitt wählen."
             )
         total -= fade_duration_seconds * (len(segments) - 1)
