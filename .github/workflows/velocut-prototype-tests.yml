@@ -1,0 +1,49 @@
+name: VeloCut 2.0 prototype tests
+
+on:
+  push:
+    branches:
+      - feature/velocut-2-video-analysis
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install FFmpeg for real video tests
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - name: Install image similarity dependency
+        run: python -m pip install 'Pillow>=11,<13'
+      - name: Compile Python modules
+        run: python -m compileall -q candidate_windows.py frame_sampler.py highlight_analyzer.py prototype_analyze.py video_probe.py highlight_models.py content_understanding.py user_goals.py intent_ranking.py prototype_intent.py adaptive_refinement.py batch_frames.py evaluate_recommendations.py preview_clips.py visual_diversity.py shot_boundaries.py reel_export.py manual_editor.py timeline_frames.py scene_preview_state.py staging_preflight.py staging_app.py
+      - name: Run offline unit tests
+        run: python -m unittest discover -s tests -v
+
+  staging-dependencies:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install exactly the staging requirements
+        run: python -m pip install -r requirements.txt
+      - name: Import staging pipeline dependencies
+        run: python -c "import streamlit, openai; from prototype_intent import analyze_files; print('Staging dependencies OK')"

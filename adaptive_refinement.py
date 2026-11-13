@@ -1,0 +1,223 @@
+"""Zweistufige visuelle Analyse: interessante 8-s-Fenster genauer untersuchen.
+
+Stufe 1 liefert grobe Beobachtungen. Hier werden höchstens zwei grobe Fenster
+in 3-s-Abschnitte mit 1.5-s-Schritten aufgelöst. Es werden *echte* zusätzliche
+Videobilder angefordert. Kein Audio, kein Bewegungsmodell, keine Punkt-genauen
+Schnittgrenzen und keine Garantie, alle kurzen Ereignisse zu sehen.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Mapping, Sequence
+
+from candidate_windows import CandidateWindow
+from batch_frames import FrameCache, select_cached_frames
+from content_understanding import SceneObservation, observe_window
+from intent_ranking import RankedScene, rank_for_goal
+from user_goals import EditingGoal
+from frame_sampler import FrameSampleError
+from visual_diversity import VisualDiversityError, fingerprint_window
+from shot_boundaries import crosses_hard_cut
+from video_probe import VideoMetadata
+
+
+@dataclass(frozen=True)
+class RefinedResult:
+    scenes: tuple[RankedScene, ...]
+    inspected_windows: int
+    selected_coarse_windows: int
+    inspected_all_coarse_windows: bool
+    notice: str | None
+    observed_windows: tuple[SceneObservation, ...] = ()
+    repeated_views_suppressed: int = 0
+    cut_crossing_windows_ignored: int = 0
+
+
+def fine_windows(
+    coarse: CandidateWindow,
+    *,
+    window_seconds: float = 3.0,
+    stride_seconds: float = 1.5,
+) -> list[CandidateWindow]:
+    """Erzeugt lückenlose kleinere Fenster INNERHALB eines groben Fensters."""
+    if (
+        not isinstance(coarse.source_id, str) or not coarse.source_id.strip()
+        or not math.isfinite(coarse.start_seconds)
+        or not math.isfinite(coarse.end_seconds)
+        or coarse.start_seconds < 0
+        or coarse.end_seconds <= coarse.start_seconds
+    ):
+        raise ValueError("Ungültiges grobes Zeitfenster.")
+    if not (
+        math.isfinite(window_seconds) and window_seconds > 0
+        and math.isfinite(stride_seconds) and 0 < stride_seconds <= window_seconds
+    ):
+        raise ValueError("Ungültige Größe oder Schrittweite.")
+
+    width = min(window_seconds, coarse.duration_seconds)
+    final_start = coarse.end_seconds - width
+    starts = []
+    pos = coarse.start_seconds
+    while pos < final_start - 1e-7:
+        starts.append(pos)
+        pos += stride_seconds
+    if not starts or abs(starts[-1] - final_start) > 1e-7:
+        starts.append(final_start)
+    return [
+        CandidateWindow(coarse.source_id, round(start, 6), round(start + width, 6))
+        for start in starts
+    ]
+
+
+def refine_for_goal(
+    client: object,
+    source_metadata: Mapping[str, VideoMetadata],
+    coarse_observations: Sequence[SceneObservation],
+    goal: EditingGoal,
+    *,
+    category_override: str | None = None,
+    model: str = "gpt-4o-mini",
+    max_coarse_windows: int = 2,
+    max_fine_windows: int = 12,
+    max_results: int = 5,
+    frame_caches: Mapping[str, FrameCache] | None = None,
+    shot_cuts: Mapping[str, Sequence[float]] | None = None,
+) -> RefinedResult:
+    """Analysiert möglichst passende grobe Fenster in höherer zeitlicher Auflösung.
+
+    Wird im Grobscan kein Nutzer-Fokus entdeckt, werden ersatzweise grobe Fenster
+    nach sichtbarer Relevanz/Qualität ausgewählt, um Kurzereignisse nicht sofort
+    als abwesend zu behandeln. Ist das Suchbudget erschöpft, wird transparent
+    kommuniziert, dass nur ein Teil des Videos dichter untersucht wurde.
+    """
+    if not 1 <= max_coarse_windows <= 4:
+        raise ValueError("max_coarse_windows muss zwischen 1 und 4 liegen.")
+    if not 1 <= max_fine_windows <= 24:
+        raise ValueError("max_fine_windows muss zwischen 1 und 24 liegen.")
+    if not 1 <= max_results <= 10:
+        raise ValueError("max_results muss zwischen 1 und 10 liegen.")
+    if not coarse_observations:
+        return RefinedResult((), 0, 0, True, "Keine groben Szenen vorhanden.")
+
+    for scene in coarse_observations:
+        source = source_metadata.get(scene.window.source_id)
+        if source is None:
+            raise ValueError("Grobe Szene ohne Video-Metadaten.")
+        if not 0 <= scene.window.start_seconds < scene.window.end_seconds <= source.duration_seconds:
+            raise ValueError("Grobe Szene außerhalb des Videos.")
+
+    coarse_ranking = rank_for_goal(
+        coarse_observations, goal, category_override=category_override,
+        max_results=max_coarse_windows,
+    )
+    selected = [item.observation for item in coarse_ranking.ranked_scenes]
+
+    # Bei Null-Treffern wegen striktem Wunsch: nicht behaupten, das Ereignis
+    # existiere nicht. Weitere grobe Beobachtungen (auch mit anderer erkannter
+    # Kategorie) können an wenigen Frames vorbeigegangen sein.
+    if len(selected) < max_coarse_windows:
+        remaining = sorted(
+            coarse_observations,
+            key=lambda obs: (
+                -(0.65 * obs.impact + 0.35 * obs.technical_quality),
+                obs.window.source_id, obs.window.start_seconds,
+            ),
+        )
+        for item in remaining:
+            if item not in selected:
+                selected.append(item)
+            if len(selected) == max_coarse_windows:
+                break
+
+    selected = selected[:max_coarse_windows]
+    expanded: list[CandidateWindow] = []
+    seen: set[tuple[str, float, float]] = set()
+    for observation in selected:
+        for window in fine_windows(observation.window):
+            key = (window.source_id, window.start_seconds, window.end_seconds)
+            if key not in seen:
+                seen.add(key)
+                expanded.append(window)
+
+    # Don't silently skip windows if configured budget is too small.
+    if len(expanded) > max_fine_windows:
+        raise ValueError(
+            f"{len(expanded)} Detailfenster benötigt, "
+            f"Budget erlaubt nur {max_fine_windows}; "
+            "bitte grobe Fensterzahl oder Budget anpassen."
+        )
+
+    # Keine KI-Anfrage für Fenster starten, die einen harten Bildwechsel
+    # innerhalb der Szene enthalten. Statt unpassende Einzelbilder zu mischen
+    # wird ein anderes vollständig zusammenhängendes Fenster bevorzugt.
+    safe_windows = [
+        window for window in expanded
+        if not crosses_hard_cut(
+            window.start_seconds, window.end_seconds,
+            shot_cuts.get(window.source_id, ()) if shot_cuts else (),
+        )
+    ]
+    cut_crossing_windows_ignored = len(expanded) - len(safe_windows)
+    fine_observations = []
+    for window in safe_windows:
+        options = {}
+        if frame_caches is not None:
+            if window.source_id not in frame_caches:
+                raise ValueError("Kein FrameCache für Quellvideo vorhanden.")
+            options["frames"] = select_cached_frames(
+                frame_caches[window.source_id], window, frame_count=5
+            )
+        fine_observations.append(
+            observe_window(
+                client, source_metadata[window.source_id], window,
+                model=model, **options,
+            )
+        )
+    fingerprints = {}
+    if frame_caches is not None:
+        for obs in fine_observations:
+            try:
+                fingerprints[obs.window] = fingerprint_window(
+                    frame_caches[obs.window.source_id], obs.window
+                )
+            except (VisualDiversityError, FrameSampleError):
+                # Fehlschlag ist unbekannte Ansicht, kein Beweis für Duplikat.
+                continue
+    ranked = rank_for_goal(
+        fine_observations, goal, category_override=category_override,
+        max_results=max_results,
+        scene_fingerprints=fingerprints if fingerprints else None,
+    )
+    complete = len(selected) == len(coarse_observations)
+    notice = ranked.notice
+    if cut_crossing_windows_ignored:
+        cut_notice = (
+            f"{cut_crossing_windows_ignored} Detail-Zeitfenster wegen eines "
+            "erkannten harten Bildwechsels innerhalb des Clips ausgelassen. "
+            "Die Schnittsuche ist eine lokale Heuristik."
+        )
+        notice = f"{notice} {cut_notice}" if notice else cut_notice
+    if not complete:
+        scope = (
+            f"Detailanalyse beschränkt auf {len(selected)} von "
+            f"{len(coarse_observations)} groben Zeitfenstern. "
+            "Nicht gefundene Ereignisse können in nicht geprüften Fenstern liegen."
+        )
+        notice = f"{notice} {scope}" if notice else scope
+    elif not ranked.ranked_scenes:
+        notice = (
+            f"{notice or 'Keine Treffer.'} Auch in den Detail-Stichproben "
+            "ist eine Abwesenheit nicht sicher nachgewiesen."
+        )
+    return RefinedResult(
+        scenes=ranked.ranked_scenes,
+        inspected_windows=len(safe_windows),
+        selected_coarse_windows=len(selected),
+        inspected_all_coarse_windows=complete,
+        notice=notice,
+        observed_windows=tuple(fine_observations),
+        repeated_views_suppressed=ranked.repeated_views_suppressed,
+        cut_crossing_windows_ignored=cut_crossing_windows_ignored,
+    )
