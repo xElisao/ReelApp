@@ -44,15 +44,54 @@ synthetisches oder einwilligungsfrei einsetzbares Testmaterial;
 keine Kundenvideos oder erkennbaren Personen in der kostenlosen
 Streamlit Community Cloud hochladen.
 
-## Kurzer Erstkontakt (Nachricht an eine bekannte Person)
+## Teilnehmer finden, wenn keine persönlichen Kontakte bestehen
 
-> Hallo! Ich entwickle gerade ein Tool, das aus vorhandenen
-> Handyvideos automatisch kurze Social-Media-Reels erstellt.
-> Ich möchte herausfinden, ob das für Ferienwohnungen,
-> Hotels oder ähnliche Betriebe tatsächlich nützlich wäre.
-> Hättest du 15 Minuten für ein kurzes, unverbindliches
-> Gespräch darüber, wie ihr derzeit Videos erstellt?
-> Es geht noch nicht um einen Kauf oder einen Video-Upload.
+**Stand 13.11.2026 – erste öffentliche Recherche, keine Kontaktaufnahme.**
+Als *beispielhaftes Suchgebiet* wurde das Mostviertel/Amstetten gewählt;
+die Region ist noch nicht vom Betreiber bestätigt.
+
+Zwei mögliche Interview-Zieltypen:
+- **Zeillerner Ferienhof**, Destelberg 159, 3311 Zeillern.
+  Kleiner Ferienhof mit zwei Ferienwohnungen, einem Doppelzimmer,
+  Urlaub am Bauernhof, Tieren und Landschaftsbezug.
+  https://www.zeillerner-ferienhof.at/
+- **Pension Leichtfried**, Hamerlingstraße 4, 3300 Amstetten.
+  Unabhängige Pension mit Suiten und Apartments.
+  https://www.pensionleichtfried.com/newweb/
+
+Diese öffentlichen Betriebe haben **keiner Intervieweinladung zugestimmt**;
+die Nennung ist keine Empfehlung für unaufgeforderte Werbeanrufe oder
+Werbe-E-Mails.
+
+**Wichtiges österreichisches TKG-Risiko:** § 174 TKG 2021 verbietet
+unverlangte Anrufe oder E-Mails zur Direktwerbung grundsätzlich auch
+im B2B-Bereich, selbst bei öffentlich genannten Kontaktadressen.
+Das Werbeverständnis ist weit; ein vermeintliches „Marktinterview“ mit
+echtem Absatz- oder Werbezweck kann trotzdem als Werbung bewertet werden.
+Echte, von der Absatzförderung unabhängige Markt- und Meinungsforschung
+ist gesondert zu bewerten. Vor kontaktierender Kundenakquise
+juristische/ WKO-Prüfung; nicht pauschal kalt anschreiben.
+
+Sichere Rekrutierung zuerst über **freiwillige Teilnahme**:
+- Mit Erlaubnis eines Gruppen-Admins eine nicht werbende
+  Interview-Einladung in eine passende Gastgeber-Community stellen.
+- Interessenten antworten freiwillig und können das Interview jederzeit
+  beenden. Keine fremden Videos oder persönlichen Daten öffentlich posten.
+- Möglich auch ein allgemein zugänglicher opt-in-Aufruf über eigene
+  Kanäle oder Rückmeldungen nach einer echten Fachveranstaltung.
+
+**Nur an Personen mit bestehendem Kontakt / geeigneter Einwilligung:**
+
+> Hallo! Ich untersuche gerade, wie kleine Unterkünfte
+> ihre eigenen Social-Media-Videos erstellen und was dabei
+> Zeit kostet. Hättest du 15 Minuten für ein freiwilliges Gespräch?
+> Ich möchte nichts verkaufen und brauche keine Video-Dateien.
+> Eine kurze Rückmeldung genügt.
+
+Quellen:
+- WKO, Direktwerbung (Stand 15.08.2026):
+  https://www.wko.at/information-consulting/werbung-marktkommunikation/werbung-per-telefon-fax-e-mail-sms-was-ist-erlaubt
+- https://ris.bka.gv.at/NormDokument.wxe?Abfrage=Bundesnormen&Gesetzesnummer=20011678&Paragraf=174
 
 ## Interviewnotizen (keine unnötigen Personendaten in GitHub)
 
