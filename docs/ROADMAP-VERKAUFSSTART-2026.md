@@ -65,6 +65,12 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   klare Top-3-Aufgaben; kein vorab unterstellter Product-Market-Fit.
   **Arbeitsmaterial:** [PHASE18-KUNDENVALIDIERUNG.md](PHASE18-KUNDENVALIDIERUNG.md)
   (Fragen, Pilotkriterien, Datenschutzgrenze und unverbindliche Namensideen).
+  **Desk Research vom 13.11.2026 durchgeführt – ohne Outreach:**
+  [PHASE19-DESK-RESEARCH-2026.md](PHASE19-DESK-RESEARCH-2026.md).
+  Nachfrage- und Konkurrenzsignale vorhanden; Immobilienmakler und
+  Immobilienfotografen vorläufig stärker als kleine Unterkünfte
+  priorisiert. **Kaufbereitschaft nicht nachgewiesen;
+  0/10 Interviews und keine zahlenden Piloten.**
 
 - [ ] **P0-04 Hosting-Entscheidung:** Keine kommerzielle Verarbeitung
   personenbezogener Videos auf Streamlit **Community Cloud**; die
