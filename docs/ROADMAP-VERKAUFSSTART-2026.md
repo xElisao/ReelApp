@@ -155,6 +155,17 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   176 automatische Tests erfolgreich, einschließlich
   echter FFmpeg-Exports mit Text, Fade und Originalton.
   [PHASE22-REEL-LOGO-OVERLAY.md](PHASE22-REEL-LOGO-OVERLAY.md).
+  **Markenfarbe-1-Teilfunktion 15.11.2026 implementiert:**
+  Optionaler HEX-Farbpicker für die Titel-/CTA-Hintergrundflächen,
+  schwarze/weiße Schrift automatisch nach maximalem Kontrast,
+  ohne Farbwahl weiterhin die alte transparente schwarze Fläche.
+  Strenge HEX-Validierung gegen Filter-Injection, sichere lokale
+  FFmpeg-Renderpipeline, Änderung der Farbe invalidiert die alte
+  Reel-Cache-Signatur. **180/180 automatisierte Tests grün**,
+  inklusive echter Cut-/Fade-MP4-Exporte mit Logo, Text und Ton,
+  sowie Python 3.12/3.13 Staging-Abhängigkeiten.
+  [PHASE23-MARKENFARBE-TEXT.md](PHASE23-MARKENFARBE-TEXT.md).
+  **Realer Benutzer-Browser-Test der Farbwahl noch offen.**
   **Erster Logo-Browser-Export 15.11.2026 visuell bestanden:**
   0,5-s-Fade, Text und Logo durchgehend, aber wegen
   `shortest=1` beim geloopten PNG **nur 131 statt 132 Frames**
@@ -186,7 +197,8 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   ohne erneuten Export bestätigte der Nutzer das Verschwinden
   der bisherigen Videovorschau (Cache-Signatur).
   **Text-Overlay-1-Teilfunktion abgenommen.**
-  Offen bleiben Logo/Farben/Templates, separater No-Text-Browsertest
+  Offen bleiben Farb-Praxistest, weitere Brand-Kit-Optionen
+  (Fonts, Vorlagen, Layouts), separater No-Text-Browsertest
   und die abschließende Verkaufsreife. **F2-02 bleibt [ ].**
 - [ ] **F2-03 Untertitel optional:** Spracherkennung,
   Zeitmarken und leicht korrigierbare Captions, mindestens
@@ -338,11 +350,14 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
 **Jetzt:** Geschützte Staging-App rebooten und Versionslabel
-`Logo-Frame-Fix 1 | 2026-11-15` kontrollieren; bei gleichem
-Video/Logo/Text mit 0,5-s-Fade nochmals ohne neue KI
-exportieren. Der neue MP4-Nachtest soll die 5,500 s bzw.
-132 Frames und die unverändert korrekte Bildgestaltung
-bestätigen (Vorversion verlor ein Schlussframe).
+`Markenfarbe 1 | 2026-11-15` kontrollieren. Anschließend
+das bekannte Landschafts-Testvideo und den gespeicherten
+Vorschau-JSON ohne neue KI laden, die zwei Szenen mit 0,5-s-Fade,
+Titel und CTA und optional DEMO-Logo nutzen. Neue Option
+`Firmenfarbe für die Textflächen verwenden` einschalten,
+Farbe z. B. `#245582` wählen, MP4 exportieren und
+zur unabhängigen Sichtprüfung hochladen. Erst nach realem
+Browser-Nachweis diese Teilfunktion als abgenommen markieren.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
