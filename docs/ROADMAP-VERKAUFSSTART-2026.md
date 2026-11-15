@@ -360,15 +360,15 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**Jetzt:** Im bereits erfolgreichen farbigen Reel-Editor
-**nur die Firmenfarbe ändern** (z. B. Blau `#245582` zu
-Rot `#AD2436`), **ohne** erneut „Reel verbinden“ zu klicken.
-Die alte Videovorschau sollte daraufhin verschwinden
-(Cache-Signatur-Test). Nach Nutzerbestätigung dieses
-Ergebnis in Phase-23-Doku nachtragen.
+**Nächste mögliche Teilfunktion:** Einfache auswählbare
+Designvorlagen (z. B. „Klassisch“ und „Modern“) für
+Titel-/CTA-Layout und Abstände, zunächst mit lokalem
+FFmpeg-Rendering, sicherer Signatur und Tests.
+Die Vorlagen müssen vor einer Produktfreigabe separat mit
+realen Nutzer-MP4s geprüft werden.
 
-**Markenfarbe 1**: echter MP4-Browser-Test der gewählten
-Farbfläche + Logo + Text + 0,5-s-Fade bereits erfolgreich.
+**Markenfarbe 1:** echter MP4-Browser-Test sowie
+Farbwechsel-Cachetest erfolgreich abgeschlossen.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
