@@ -35,7 +35,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Transition-Fix 3 | 2026-11-13"
+LAB_BUILD = "Text-Overlay 1 | 2026-11-15"
 
 
 st.set_page_config(
@@ -846,8 +846,9 @@ if clips_to_show:
         "Ohne Ton ist die Standardeinstellung; vorhandener Originalton "
         "kann beim Export ausdrücklich eingeschaltet werden. "
         "Optional verbinden weiche Überblendungen von 0,25 bis 1 Sekunde "
-        "die Szenen. Keine zusätzliche KI-Analyse, Spracherkennung "
-        "oder Musikeinblendung."
+        "die Szenen. Neu: Ein Titel und eine Schlusszeile können "
+        "ohne neue KI-Analyse ins MP4 eingeblendet werden. "
+        "Keine Spracherkennung oder Musikeinblendung."
     )
     reel_order = st.radio(
         "Reihenfolge der Clips im Reel",
@@ -926,6 +927,42 @@ if clips_to_show:
             "enthalten. Diese Testfunktion bitte zunächst nur mit "
             "eigenen oder freigegebenen Aufnahmen verwenden."
         )
+    st.markdown("##### ✍️ Texteinblendungen (optional)")
+    reel_text_enabled = st.checkbox(
+        "Titel und Schlusszeile einblenden",
+        value=False,
+        key=f"velocut_reel_text_enabled_{preview_identifier}",
+        help=(
+            "Der Einstiegstitel erscheint am Anfang des Reels, "
+            "die Schlusszeile am Ende. Ohne neue KI-Kosten."
+        ),
+    )
+    reel_title_text = ""
+    reel_cta_text = ""
+    if reel_text_enabled:
+        reel_title_text = st.text_input(
+            "Titel am Anfang",
+            value="",
+            max_chars=56,
+            placeholder="z. B. Moderne Wohnung mit Bergblick",
+            key=f"velocut_reel_title_{preview_identifier}",
+        ).strip()
+        reel_cta_text = st.text_input(
+            "Schlusszeile am Ende",
+            value="",
+            max_chars=56,
+            placeholder="z. B. Jetzt Besichtigung vereinbaren",
+            key=f"velocut_reel_cta_{preview_identifier}",
+        ).strip()
+        st.caption(
+            "Jede Einblendung erscheint ungefähr 2 Sekunden lang. "
+            "Bei sehr kurzen Reels passt sich die Dauer an. "
+            "Die Texte werden lokal ins fertige MP4 geschrieben. "
+            "Bitte nur überprüfte Angaben und geeignete eigene Texte verwenden."
+        )
+        if not reel_title_text and not reel_cta_text:
+            st.info("Trage einen Titel oder eine Schlusszeile ein, um Text einzublenden.")
+
     order_valid = True
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
@@ -1007,7 +1044,8 @@ if clips_to_show:
             [
                 preview_identifier, reel_order, reel_background_mode,
                 reel_audio_mode, reel_transition_mode,
-                reel_fade_duration, selected_edits_signature,
+                reel_fade_duration, reel_title_text, reel_cta_text,
+                selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -1063,6 +1101,8 @@ if clips_to_show:
                     audio_mode=reel_audio_mode,
                     transition_mode=reel_transition_mode,
                     fade_duration_seconds=reel_fade_duration,
+                    title_text=reel_title_text,
+                    cta_text=reel_cta_text,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1089,7 +1129,8 @@ if clips_to_show:
             file_name=(
                 f"velocut_test_reel_9x16_{reel_background_mode}_"
                 f"{reel_audio_mode}_{reel_transition_mode}"
-                f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}.mp4"
+                f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}"
+                f"{'_text' if reel_title_text or reel_cta_text else ''}.mp4"
             ),
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
