@@ -168,8 +168,12 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   vollständig fehlerfrei dekodierbar. Stichproben bestätigen
   durchgehend sichtbares DEMO-Logo, Titel am Anfang, CTA am Ende,
   weiche Überblendung und das wiederhergestellte Schlussframe.
-  **Logo-/Text-/Fade-Teilfunktion praxisabgenommen**; weiterhin
-  Logo-Wechsel-Cachetest und vollständiges Brand Kit offen.
+  **Logo-/Text-/Fade-Teilfunktion praxisabgenommen.**
+  **Logo-Entfernungs-Cachetest 15.11.2026 bestanden:**
+  Nutzer entfernte nach dem Export das DEMO-Logo ohne
+  erneutes Rendern und bestätigte, dass die alte Videovorschau
+  verschwand. Logo-Ersatzwechsel nicht separat geprüft;
+  vollständiges Brand Kit (Farben, Vorlagen, Layouts) offen.
   **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
   15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
   Titel zu Beginn, CTA am Schluss visuell bestätigt.
