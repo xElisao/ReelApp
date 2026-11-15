@@ -139,7 +139,7 @@ def normalize_logo_png(logo_png_bytes: bytes | None) -> bytes | None:
         raise ReelExportError("Das Logo muss als PNG-Datei hochgeladen werden.")
     if not 8 <= len(logo_png_bytes) <= MAX_LOGO_BYTES:
         raise ReelExportError("Die Logo-PNG darf höchstens 2 MB groß sein.")
-    if not logo_png_bytes.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+    if not logo_png_bytes.startswith(bytes((137, 80, 78, 71, 13, 10, 26, 10))):
         raise ReelExportError("Bitte eine echte PNG-Datei für das Logo verwenden.")
     try:
         with Image.open(io.BytesIO(logo_png_bytes)) as image:
