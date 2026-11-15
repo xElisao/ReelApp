@@ -149,6 +149,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   **Fortschritt:** Einstiegs- und CTA-Text optional in MP4 eingebettet;
   alle 172 automatisierten Tests erfolgreich, inkl. realem FFmpeg-Rendering.
   [PHASE21-REEL-TITEL-CTA.md](PHASE21-REEL-TITEL-CTA.md).
+  **Logo-Overlay-1-Teilfunktion 15.11.2026 implementiert:**
+  PNG-Upload (max. 2 MB, 2048×2048), lokale Bereinigung,
+  platzsparendes Logo oben rechts über alle Szenen;
+  176 automatische Tests erfolgreich, einschließlich
+  echter FFmpeg-Exports mit Text, Fade und Originalton.
+  [PHASE22-REEL-LOGO-OVERLAY.md](PHASE22-REEL-LOGO-OVERLAY.md).
+  Browser-Abnahme eines echten Logo-Reels **noch offen**.
   **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
   15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
   Titel zu Beginn, CTA am Schluss visuell bestätigt.
@@ -312,7 +319,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**P0-01** zuerst: Namens-/Marken-Konflikt und Folgen für Branding
-prüfen, zwei bis drei alternative Produktnamen sammeln und für
-den ausgewählten Namen die professionelle Register-/Rechtsprüfung
-als klaren Go-/No-Go-Schritt vorbereiten.
+**Jetzt:** Geschützte Staging-Test-App rebooten und Version
+`Logo-Overlay 1 | 2026-11-15` kontrollieren. Danach das
+bereits vorhandene Landschafts-Testvideo + gespeicherte
+Vorschau ohne neue KI laden, ein **neutrales PNG-Testlogo**
+im neuen Logo-Upload verwenden und den echten MP4-Export
+mit Fade + Text + Logo zur unabhängigen Sichtprüfung hochladen.
+
+**P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
+Verkaufsstart offen und darf nicht durch einen internen
+Testlogo-Upload als abgeschlossen missverstanden werden.
