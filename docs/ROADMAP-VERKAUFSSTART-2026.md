@@ -156,8 +156,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   Nutzer-MP4 mit Text + **0,50-s-Überblendung**, **5,500 s**,
   **540×960**, **24 fps**, **132 Frames**; sichtbare weiche
   Überlagerung der zwei Szenen, Anfangs- und Schlusstext korrekt.
-  **Offen** bleiben Stale-Cache-Prüfung nach Textänderung,
-  Logo/Farben/Templates und abschließende Verkaufsreife.
+  **Dritter Browser-Test am 15.11.2026 ebenfalls bestanden:**
+  Nach Änderung des Titels zu `Traumhafte Bergstraßen`
+  ohne erneuten Export bestätigte der Nutzer das Verschwinden
+  der bisherigen Videovorschau (Cache-Signatur).
+  **Text-Overlay-1-Teilfunktion abgenommen.**
+  Offen bleiben Logo/Farben/Templates, separater No-Text-Browsertest
+  und die abschließende Verkaufsreife. **F2-02 bleibt [ ].**
 - [ ] **F2-03 Untertitel optional:** Spracherkennung,
   Zeitmarken und leicht korrigierbare Captions, mindestens
   Deutsch und Englisch; Kosten transparent und
