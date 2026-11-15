@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import math
 import io
+import re
 import shutil
 import subprocess
 import tempfile
@@ -70,12 +71,51 @@ def normalize_overlay_text(value: str) -> str:
     return text
 
 
+def normalize_brand_color(value: str | None) -> str | None:
+    """Prüft eine Firmenfarbe streng, bevor FFmpeg aufgerufen wird."""
+    if value is None:
+        return None
+    if not isinstance(value, str) or re.fullmatch(r"#[0-9A-Fa-f]{6}", value) is None:
+        raise ReelExportError(
+            "Bitte eine Markenfarbe als sechsstelligen HEX-Wert (#RRGGBB) wählen."
+        )
+    return value.upper()
+
+
+def _brand_text_style(brand_color: str | None) -> tuple[str, str]:
+    """Volltonfarbe mit gut lesbarer schwarzer oder weißer Schrift.
+
+    Bei deckender Farbfläche und Wahl des größeren Kontrastes
+    erreichen Schwarz/Weiß >= 4,5:1 nach WCAG-Berechnung
+    (vor der H.264-Komprimierung).
+    """
+    if brand_color is None:
+        return "black@0.65", "white"
+    rgb = tuple(int(brand_color[i:i + 2], 16) / 255 for i in (1, 3, 5))
+
+    def linear(channel: float) -> float:
+        return (
+            channel / 12.92 if channel <= 0.04045
+            else ((channel + 0.055) / 1.055) ** 2.4
+        )
+
+    luminance = sum(
+        linear(channel) * weight
+        for channel, weight in zip(rgb, (0.2126, 0.7152, 0.0722))
+    )
+    black_contrast = (luminance + 0.05) / 0.05
+    white_contrast = 1.05 / (luminance + 0.05)
+    font_color = "black" if black_contrast >= white_contrast else "white"
+    return f"0x{brand_color[1:]}", font_color
+
+
 def _append_reel_text_overlays(
     graph: list[str],
     target: Path,
     total_seconds: float,
     title_text: str,
     cta_text: str,
+    brand_color: str | None = None,
 ) -> str:
     """Blendet optionale Texte in sicheren Bereichen ein, ohne KI-Aufruf.
 
@@ -91,6 +131,7 @@ def _append_reel_text_overlays(
             "Die Schriftart für Texteinblendungen fehlt auf dem Testserver."
         )
     output_label = "video"
+    box_color, font_color = _brand_text_style(brand_color)
     visible_seconds = min(OVERLAY_DURATION_SECONDS, total_seconds / 2.0)
     for kind, text in (("title", title_text), ("cta", cta_text)):
         if not text:
@@ -113,8 +154,8 @@ def _append_reel_text_overlays(
             f"[{output_label}]drawtext="
             f"fontfile='{OVERLAY_FONT_PATH.as_posix()}':"
             f"textfile='{text_path.as_posix()}':"
-            "expansion=none:fontsize=30:fontcolor=white:"
-            "box=1:boxcolor=black@0.65:boxborderw=16:"
+            f"expansion=none:fontsize=30:fontcolor={font_color}:"
+            f"box=1:boxcolor={box_color}:boxborderw=16:"
             "line_spacing=6:"
             "x=(w-text_w)/2:"
             f"y={y}:enable='{enable}'"
@@ -316,6 +357,7 @@ def render_test_reel(
     title_text: str = "",
     cta_text: str = "",
     logo_png_bytes: bytes | None = None,
+    brand_color: str | None = None,
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -333,6 +375,10 @@ def render_test_reel(
     Optionale Titel und Schlusszeilen und ein PNG-Logo werden erst NACH
     den Szenenübergängen rein lokal ins MP4 gerendert; sie ändern
     die Laufzeit nicht und erfordern keine weiteren KI-Aufrufe.
+    Eine optionale Markenfarbe färbt die Titel- und CTA-Textflächen
+    deckend ein; schwarze/weiße Schrift hat den höheren Kontrast.
+    Ohne Farbwahl bleibt die bisherige halbtransparente schwarze Box.
+    Der Logo-Export bleibt unverändert.
     """
     total_seconds = expected_reel_duration(
         segments, transition_mode=transition_mode,
@@ -340,6 +386,7 @@ def render_test_reel(
     )
     title_text = normalize_overlay_text(title_text)
     cta_text = normalize_overlay_text(cta_text)
+    brand_color = normalize_brand_color(brand_color)
     # Wichtig: Bilddatei schon vor dem FFmpeg-Start validieren und
     # vollständig neu als PNG kodieren; nur die sichere Version nutzen.
     logo_png_bytes = normalize_logo_png(logo_png_bytes)
@@ -469,6 +516,7 @@ def render_test_reel(
             )
         output_video_label = _append_reel_text_overlays(
             graph, target, total_seconds, title_text, cta_text,
+            brand_color,
         )
         if logo_png_bytes is not None:
             logo_path = target / "brand_logo.png"
