@@ -103,10 +103,13 @@ differenzieren, sofern zuverlässig demonstriert.
 - [x] Öffentliche Nachfrage- und Zeitmangelindikatoren ermitteln.
 - [x] Aktuelle Preise/Features von drei Konkurrenten vergleichen.
 - [x] Öffentliche Berichte für zwei passende Nischen auswerten.
-- [ ] **Wettbewerbs-Lückenmatrix erstellen**:
+- [x] **Wettbewerbs-Lückenmatrix erstellt (15.11.2026):**
   z. B. Szene auf Basis *Bildinhalts* auswählen, einfacher Feinschnitt
   ohne erneut KI zu bezahlen, branchenspezifische Story, Brand Kit,
   Smart Reframe, Datenschutz, Preis/Limits.
+  Ergebnis: [PHASE20-WETTBEWERBSMATRIX-2026.md](PHASE20-WETTBEWERBSMATRIX-2026.md).
+  Zusätzliche Immobilien-Rohvideo-Konkurrenten Shorty, VideoMotion
+  und Submagic dokumentiert; keine unbesetzte Nische behaupten.
 - [ ] Aus **eigenem/rechtmäßig lizenziertem und datenschutzfreiem**
   Material zwei fiktive Demos erstellen:
   1. Immobilie: 20-s-Wohnungsrundgang, 9:16, Titel+CTA.
