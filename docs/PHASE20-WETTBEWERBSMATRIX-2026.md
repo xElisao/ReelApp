@@ -123,12 +123,13 @@ und am späteren Kundenergebnis überprüft werden.
       geprüft; Grenzen und Anbieterwerbung kenntlich gemacht.
 - [x] Feature-Lücken gegen **aktuelle Laborfunktionen** verglichen.
 - [x] Zwei Branchenideen (Immobilie/Unterkunft) differenziert.
-- [ ] In Demo 1 Texteinblendungen technisch ergänzen.
+- [x] In Demo 1 Texteinblendungen technisch ergänzen (**Text-Overlay 1**, 15.11.2026; 172 Tests, auch echte FFmpeg-MP4-Tests; **Browser-Praxistest noch offen**).
 - [ ] In Demo 2 Branchenstory erstellen.
 - [ ] Beide Demos von Anfang bis Ende mit echten, rechtmäßig
       nutzbaren Testvideos abnehmen.
 - [ ] Kundennachweis nach Datenschutz-/Hostingfreigabe.
 
-**Nächster Schritt:** Mit nur einer neuen Produktfunktion anfangen:
-**optional eingeblendeter Einstiegstitel und Abschlusszeile
-im exportierten Reel**, ohne zusätzliche KI-Analyse.
+**Nächster Schritt:** Geschützte Streamlit-App neu starten und die implementierte
+**Titel-/Schlusszeilen-Einblendung** mit der gespeicherten Landschaftsszenen-Vorschau
+ohne neuen KI-Aufruf im Browser testen. Details:
+[PHASE21-REEL-TITEL-CTA.md](PHASE21-REEL-TITEL-CTA.md).
