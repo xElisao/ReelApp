@@ -142,10 +142,15 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   Schlussbild; behauptet keine erfundenen Eigenschaften.
   **Abnahme:** Laien erhalten eine plausible Reihenfolge und
   können sie ohne neue Analyse ändern.
-- [ ] **F2-02 Titel/CTA/Brand Kit:** sichere Text-Ebenen, Logo,
+- [ ] **F2-02 Titel/CTA/Brand Kit (Teilfunktion umgesetzt 15.11.2026):** sichere Text-Ebenen, Logo,
   Farben, Schrift, Einstieg und Abspann, Social-Safe-Areas.
   **Abnahme:** tatsächlich veröffentlichbares Reel ohne
   Weiterbearbeitung in anderer Software.
+  **Fortschritt:** Einstiegs- und CTA-Text optional in MP4 eingebettet;
+  alle 172 automatisierten Tests erfolgreich, inkl. realem FFmpeg-Rendering.
+  [PHASE21-REEL-TITEL-CTA.md](PHASE21-REEL-TITEL-CTA.md).
+  Browser-Praxistest, Logo/Farben/Templates und abschließende
+  Verkaufsreife noch **offen**.
 - [ ] **F2-03 Untertitel optional:** Spracherkennung,
   Zeitmarken und leicht korrigierbare Captions, mindestens
   Deutsch und Englisch; Kosten transparent und
