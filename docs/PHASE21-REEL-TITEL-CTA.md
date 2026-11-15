@@ -136,8 +136,16 @@ der neue Abschnitt **`✍️ Texteinblendungen (optional)`**.
 
 **Stand der Praxisabnahme:** Titel, CTA, direkter Schnitt **und**
 0,5-s-Fade jeweils per echtem Nutzer-MP4 unabhängig bestätigt.
-Offen bleiben Stale-Cache-Prüfung nach Textänderung,
-Tests ohne Text sowie weitere Brand-Kit-Funktionen.
+**Manueller Cache-Sicherheitstest am 15.11.2026 bestanden:**
+Der Nutzer änderte den Einstiegstitel von
+`Bergstraßen entdecken` zu `Traumhafte Bergstraßen`
+**ohne neu zu exportieren** und bestätigte, dass die
+bisherige Videovorschau verschwand. Das direkte Nichtanzeigen
+des alten Downloads wurde nicht gesondert bestätigt, ist aber
+an dieselbe Reel-Signatur-Bedingung gekoppelt.
+Noch offen: ein expliziter Browsertest ganz ohne Texte und
+weitere Brand-Kit-Funktionen (Logo, Farben, Vorlagen).
+**Die erste Text-Overlay-Teilfunktion ist browserseitig abgenommen.**
 
 **Wichtig:** Staging ist weiterhin keine für Fremdkunden
 freigegebene kommerzielle Anwendung.
