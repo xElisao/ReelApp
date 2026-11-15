@@ -151,9 +151,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   [PHASE21-REEL-TITEL-CTA.md](PHASE21-REEL-TITEL-CTA.md).
   **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
   15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
-  Titel zu Beginn, CTA am Schluss visuell bestätigt. Reale Kombination
-  mit weicher Blende sowie Stale-Cache-Prüfung noch offen.
-  Logo/Farben/Templates und abschließende Verkaufsreife ebenso **offen**.
+  Titel zu Beginn, CTA am Schluss visuell bestätigt.
+  **Zweiter Browser-Test 15.11.2026 ebenfalls bestanden:**
+  Nutzer-MP4 mit Text + **0,50-s-Überblendung**, **5,500 s**,
+  **540×960**, **24 fps**, **132 Frames**; sichtbare weiche
+  Überlagerung der zwei Szenen, Anfangs- und Schlusstext korrekt.
+  **Offen** bleiben Stale-Cache-Prüfung nach Textänderung,
+  Logo/Farben/Templates und abschließende Verkaufsreife.
 - [ ] **F2-03 Untertitel optional:** Spracherkennung,
   Zeitmarken und leicht korrigierbare Captions, mindestens
   Deutsch und Englisch; Kosten transparent und
