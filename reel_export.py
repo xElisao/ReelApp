@@ -11,6 +11,7 @@ Es wird weder das Originalvideo noch die OpenAI-API erneut benötigt.
 from __future__ import annotations
 
 import math
+import io
 import shutil
 import subprocess
 import tempfile
@@ -19,6 +20,8 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
+
+from PIL import Image, UnidentifiedImageError
 
 
 MAX_SEGMENTS = 3
@@ -34,6 +37,12 @@ FADE_DURATIONS = frozenset({0.25, 0.5, 1.0})
 MAX_OVERLAY_CHARACTERS = 56
 OVERLAY_FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 OVERLAY_DURATION_SECONDS = 2.0
+MAX_LOGO_BYTES = 2 * 1024 * 1024
+MAX_LOGO_IMAGE_DIMENSION = 2048
+LOGO_RENDER_WIDTH = 144
+LOGO_RENDER_HEIGHT = 88
+LOGO_MARGIN_RIGHT = 32
+LOGO_MARGIN_TOP = 48
 
 
 class ReelExportError(RuntimeError):
@@ -113,6 +122,68 @@ def _append_reel_text_overlays(
         )
         output_label = next_label
     return output_label
+
+
+def normalize_logo_png(logo_png_bytes: bytes | None) -> bytes | None:
+    """Validiert einen Logo-Upload und entfernt Metadaten, bevor FFmpeg ihn sieht.
+
+    Nur statische PNGs, mit Grenzen für Dateigröße und Bildpixel. Die
+    transparente Fläche wird auf sichtbare Pixel zugeschnitten; das Logo
+    wird proportional auf maximal 144×88 Pixel skaliert. Als völlig
+    neu kodiertes RGBA-PNG verlassen weder eingebettete Metadaten noch
+    fremde Dateinamen den lokalen temporären Verarbeitungsbereich.
+    """
+    if logo_png_bytes is None:
+        return None
+    if not isinstance(logo_png_bytes, bytes):
+        raise ReelExportError("Das Logo muss als PNG-Datei hochgeladen werden.")
+    if not 8 <= len(logo_png_bytes) <= MAX_LOGO_BYTES:
+        raise ReelExportError("Die Logo-PNG darf höchstens 2 MB groß sein.")
+    if not logo_png_bytes.startswith(b"\\x89PNG\\r\\n\\x1a\\n"):
+        raise ReelExportError("Bitte eine echte PNG-Datei für das Logo verwenden.")
+    try:
+        with Image.open(io.BytesIO(logo_png_bytes)) as image:
+            if image.format != "PNG":
+                raise ReelExportError("Das Logo muss eine PNG-Datei sein.")
+            width, height = image.size
+            if (
+                not 1 <= width <= MAX_LOGO_IMAGE_DIMENSION
+                or not 1 <= height <= MAX_LOGO_IMAGE_DIMENSION
+                or getattr(image, "n_frames", 1) != 1
+            ):
+                raise ReelExportError(
+                    "Das Logo muss ein einzelnes PNG-Bild mit höchstens "
+                    "2048 × 2048 Pixel sein."
+                )
+            image.load()
+            canvas = image.convert("RGBA")
+    except (UnidentifiedImageError, OSError, ValueError, SyntaxError, Image.DecompressionBombError) as exc:
+        raise ReelExportError("Die hochgeladene Logo-Datei ist kein lesbares PNG.") from exc
+    alpha_bounds = canvas.getchannel("A").getbbox()
+    if alpha_bounds is None:
+        raise ReelExportError("Das Logo ist vollständig transparent und daher unsichtbar.")
+    canvas = canvas.crop(alpha_bounds)
+    canvas.thumbnail(
+        (LOGO_RENDER_WIDTH, LOGO_RENDER_HEIGHT), Image.Resampling.LANCZOS,
+    )
+    destination = io.BytesIO()
+    canvas.save(destination, format="PNG", optimize=False)
+    return destination.getvalue()
+
+
+def _append_reel_logo_overlay(
+    graph: list[str], output_video_label: str,
+    logo_input_index: int,
+) -> str:
+    """Legt das geprüfte PNG in die rechte obere Ecke des fertigen Reels."""
+    graph.append(
+        f"[{output_video_label}][{logo_input_index}:v:0]"
+        f"overlay=x=W-w-{LOGO_MARGIN_RIGHT}:y={LOGO_MARGIN_TOP}:"
+        "shortest=1:format=auto,"
+        "format=yuv420p,settb=AVTB,fps=24"
+        "[video_logo]"
+    )
+    return "video_logo"
 
 
 @dataclass(frozen=True)
@@ -244,6 +315,7 @@ def render_test_reel(
     fade_duration_seconds: float = FADE_SECONDS,
     title_text: str = "",
     cta_text: str = "",
+    logo_png_bytes: bytes | None = None,
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -258,8 +330,9 @@ def render_test_reel(
     weichgezeichnetem Bildmaterial, "black" bietet den alten Letterbox-Modus.
     "cut" verbindet direkt; "fade" überblendet mit wählbarer Dauer
     (0,25, 0,5 oder 1,0 s) per xfade und synchronem acrossfade.
-    Optionale Titel und Schlusszeilen werden erst NACH den Szenenübergängen
-    rein lokal ins MP4 gerendert; sie ändern die Laufzeit nicht.
+    Optionale Titel und Schlusszeilen und ein PNG-Logo werden erst NACH
+    den Szenenübergängen rein lokal ins MP4 gerendert; sie ändern
+    die Laufzeit nicht und erfordern keine weiteren KI-Aufrufe.
     """
     total_seconds = expected_reel_duration(
         segments, transition_mode=transition_mode,
@@ -267,6 +340,9 @@ def render_test_reel(
     )
     title_text = normalize_overlay_text(title_text)
     cta_text = normalize_overlay_text(cta_text)
+    # Wichtig: Bilddatei schon vor dem FFmpeg-Start validieren und
+    # vollständig neu als PNG kodieren; nur die sichere Version nutzen.
+    logo_png_bytes = normalize_logo_png(logo_png_bytes)
     if background_mode not in BACKGROUND_MODES:
         raise ReelExportError("Unbekannter Hintergrundmodus.")
     if audio_mode not in AUDIO_MODES:
@@ -394,6 +470,16 @@ def render_test_reel(
         output_video_label = _append_reel_text_overlays(
             graph, target, total_seconds, title_text, cta_text,
         )
+        if logo_png_bytes is not None:
+            logo_path = target / "brand_logo.png"
+            logo_path.write_bytes(logo_png_bytes)
+            logo_input_index = len(segments)
+            cmd.extend([
+                "-loop", "1", "-framerate", "24", "-i", str(logo_path),
+            ])
+            output_video_label = _append_reel_logo_overlay(
+                graph, output_video_label, logo_input_index,
+            )
         destination = target / "velocut_test_reel.mp4"
         cmd.extend([
             "-filter_complex", ";".join(graph),
