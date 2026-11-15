@@ -30,12 +30,13 @@ from timeline_frames import (
 )
 from video_probe import VideoProbeError, probe_video
 from reel_export import (
-    ReelExportError, ReelSegment, expected_reel_duration, render_test_reel,
+    MAX_LOGO_BYTES, ReelExportError, ReelSegment, expected_reel_duration,
+    normalize_logo_png, render_test_reel,
 )
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Text-Overlay 1 | 2026-11-15"
+LAB_BUILD = "Logo-Overlay 1 | 2026-11-15"
 
 
 st.set_page_config(
@@ -846,7 +847,7 @@ if clips_to_show:
         "Ohne Ton ist die Standardeinstellung; vorhandener Originalton "
         "kann beim Export ausdrücklich eingeschaltet werden. "
         "Optional verbinden weiche Überblendungen von 0,25 bis 1 Sekunde "
-        "die Szenen. Neu: Ein Titel und eine Schlusszeile können "
+        "die Szenen. Titel, Schlusszeile und ein eigenes PNG-Logo können "
         "ohne neue KI-Analyse ins MP4 eingeblendet werden. "
         "Keine Spracherkennung oder Musikeinblendung."
     )
@@ -963,6 +964,40 @@ if clips_to_show:
         if not reel_title_text and not reel_cta_text:
             st.info("Trage einen Titel oder eine Schlusszeile ein, um Text einzublenden.")
 
+    st.markdown("##### 🏷️ Firmenlogo (optional)")
+    logo_upload = st.file_uploader(
+        "Eigenes Logo als PNG hochladen",
+        type=["png"],
+        accept_multiple_files=False,
+        key=f"velocut_reel_logo_{preview_identifier}",
+        help=(
+            "Transparentes PNG empfohlen, maximal 2 MB und 2048 × 2048 Pixel. "
+            "Das Logo erscheint rechts oben während des ganzen Reels "
+            "und wird proportional auf maximal 144 × 88 Pixel verkleinert."
+        ),
+    )
+    reel_logo_bytes = None
+    reel_logo_error = None
+    if logo_upload is not None:
+        try:
+            if logo_upload.size > MAX_LOGO_BYTES:
+                raise ReelExportError("Die Logo-PNG darf höchstens 2 MB groß sein.")
+            reel_logo_bytes = normalize_logo_png(logo_upload.getvalue())
+            st.image(reel_logo_bytes, caption="Logo-Vorschau", width=120)
+            st.caption(
+                "Das Logo erscheint oben rechts in jeder Szene. "
+                "Das Logo bleibt lokal und wird ohne neue KI-Analyse eingeblendet. "
+                "Bitte nur ein eigenes oder zur Nutzung berechtigtes Logo hochladen."
+            )
+        except ReelExportError as exc:
+            reel_logo_error = str(exc)
+            st.error(f"Logo korrigieren: {exc}")
+    reel_logo_signature = (
+        hashlib.sha256(reel_logo_bytes).hexdigest()
+        if reel_logo_bytes is not None
+        else ("invalid" if logo_upload is not None else None)
+    )
+
     order_valid = True
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
@@ -1045,7 +1080,7 @@ if clips_to_show:
                 preview_identifier, reel_order, reel_background_mode,
                 reel_audio_mode, reel_transition_mode,
                 reel_fade_duration, reel_title_text, reel_cta_text,
-                selected_edits_signature,
+                reel_logo_signature, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -1070,7 +1105,7 @@ if clips_to_show:
         "🎬 Ausgewählte Clips zu einem Reel verbinden",
         disabled=(
             len(selected_for_reel) < 2 or not order_valid
-            or edit_error is not None
+            or edit_error is not None or reel_logo_error is not None
         ),
         key=f"velocut_reel_render_{preview_identifier}",
     ):
@@ -1103,6 +1138,7 @@ if clips_to_show:
                     fade_duration_seconds=reel_fade_duration,
                     title_text=reel_title_text,
                     cta_text=reel_cta_text,
+                    logo_png_bytes=reel_logo_bytes,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1130,7 +1166,8 @@ if clips_to_show:
                 f"velocut_test_reel_9x16_{reel_background_mode}_"
                 f"{reel_audio_mode}_{reel_transition_mode}"
                 f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}"
-                f"{'_text' if reel_title_text or reel_cta_text else ''}.mp4"
+                f"{'_text' if reel_title_text or reel_cta_text else ''}"
+                f"{'_logo' if reel_logo_bytes is not None else ''}.mp4"
             ),
             mime="video/mp4",
             key=f"velocut_reel_download_{preview_identifier}",
