@@ -149,8 +149,11 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   **Fortschritt:** Einstiegs- und CTA-Text optional in MP4 eingebettet;
   alle 172 automatisierten Tests erfolgreich, inkl. realem FFmpeg-Rendering.
   [PHASE21-REEL-TITEL-CTA.md](PHASE21-REEL-TITEL-CTA.md).
-  Browser-Praxistest, Logo/Farben/Templates und abschließende
-  Verkaufsreife noch **offen**.
+  **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
+  15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
+  Titel zu Beginn, CTA am Schluss visuell bestätigt. Reale Kombination
+  mit weicher Blende sowie Stale-Cache-Prüfung noch offen.
+  Logo/Farben/Templates und abschließende Verkaufsreife ebenso **offen**.
 - [ ] **F2-03 Untertitel optional:** Spracherkennung,
   Zeitmarken und leicht korrigierbare Captions, mindestens
   Deutsch und Englisch; Kosten transparent und
