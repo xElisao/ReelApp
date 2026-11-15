@@ -97,6 +97,28 @@ der neue Abschnitt **`✍️ Texteinblendungen (optional)`**.
   für die Kombination steht noch aus. MP4 lokal geprüft, nicht
   als sensibles Testmaterial ins Repository kopiert.
 
+- **Zweiter echter Nutzer-Browser-Praxistest am 15.11.2026 bestanden:
+  Titel + CTA + weiche Überblendung 0,50 s.**
+  Nutzer hat `velocut_test_reel_9x16_blur_mute_fade_050cs_text.mp4`
+  hochgeladen. Per `ffprobe` unabhängig bestätigt:
+  **5,500 Sekunden**, **280.336 Bytes**, **H.264**, **540×960**,
+  **24 fps**, **132 Frames**, **nur Videospur ohne Ton**.
+  Die Datei lässt sich vollständig und fehlerfrei dekodieren
+  (`ffmpeg -f null -`, Rückgabewert 0).
+  Stichprobenframes aus dem **echten Nutzer-Export** zeigen
+  den Einstiegstitel `Bergstraßen entdecken` bei 0,4 / 1,0 /
+  1,8 s und nicht mehr bei 2,15 s. Die Überlagerung beider
+  Landschaften ist sichtbar ungefähr zwischen 2,5 und 3,0 s,
+  insbesondere bei 2,65 / 2,75 / 2,9 s, und endet in der
+  grünen Tallandschaft ohne sichtbaren harten Schnitt.
+  `Mehr entdecken` steht bei 3,8 / 4,0 / 4,3 / 4,8 / 5,2 s
+  gut lesbar über der Landschaft. Die Laufzeit stimmt exakt
+  mit 2×3,0 s minus 0,5 s Überlappung überein.
+  Keine visuellen Beschnitte der Textflächen erkennbar.
+  **Damit ist die Browser-Praxisabnahme der Kombination
+  Fade + Titel + CTA abgeschlossen.**
+  MP4 ist **nicht** im GitHub-Repository abgelegt.
+
 ## Nächster manueller Schritt (einzeln testen)
 
 1. Geschützte Streamlit-Test-App über **Reboot** neu starten.
@@ -112,9 +134,10 @@ der neue Abschnitt **`✍️ Texteinblendungen (optional)`**.
 6. Manuell einen Titel ändern: älteres MP4 darf bis zum nächsten
    erneuten Export nicht als aktuell angezeigt werden.
 
-**Stand der Praxisabnahme:** Titel, CTA und Cut-Export per Nutzer-MP4
-bestätigt. Stale-Cache-Prüfung nach Texteingabe und echter Fade+
-Text-Export bleiben für spätere Regressionstests offen.
+**Stand der Praxisabnahme:** Titel, CTA, direkter Schnitt **und**
+0,5-s-Fade jeweils per echtem Nutzer-MP4 unabhängig bestätigt.
+Offen bleiben Stale-Cache-Prüfung nach Textänderung,
+Tests ohne Text sowie weitere Brand-Kit-Funktionen.
 
 **Wichtig:** Staging ist weiterhin keine für Fremdkunden
 freigegebene kommerzielle Anwendung.
