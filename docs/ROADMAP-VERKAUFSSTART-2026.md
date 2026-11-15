@@ -165,7 +165,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   inklusive echter Cut-/Fade-MP4-Exporte mit Logo, Text und Ton,
   sowie Python 3.12/3.13 Staging-Abhängigkeiten.
   [PHASE23-MARKENFARBE-TEXT.md](PHASE23-MARKENFARBE-TEXT.md).
-  **Realer Benutzer-Browser-Test der Farbwahl noch offen.**
+  **Realer Browser-Praxistest Markenfarbe am 15.11.2026 bestanden:**
+  echtes Nutzer-MP4 mit `#245582`, Titel/CTA, DEMO-Logo,
+  0,5-s-Fade und unscharfem Hintergrund. Unabhängig geprüft:
+  **5,500 s, 132 Frames, 24 fps, 540×960, H.264, stumm**;
+  16 Einzelbilder bestätigen lesbare weiße Schrift auf blauen
+  Titel-/CTA-Flächen, durchgehendes Logo und weiche Blende.
+  Browser-Cache-Test nach Farbänderung **noch offen**.
   **Erster Logo-Browser-Export 15.11.2026 visuell bestanden:**
   0,5-s-Fade, Text und Logo durchgehend, aber wegen
   `shortest=1` beim geloopten PNG **nur 131 statt 132 Frames**
