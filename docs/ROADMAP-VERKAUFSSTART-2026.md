@@ -171,7 +171,12 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   **5,500 s, 132 Frames, 24 fps, 540×960, H.264, stumm**;
   16 Einzelbilder bestätigen lesbare weiße Schrift auf blauen
   Titel-/CTA-Flächen, durchgehendes Logo und weiche Blende.
-  Browser-Cache-Test nach Farbänderung **noch offen**.
+  **Browser-Cache-Test nach Farbänderung am 15.11.2026 bestanden:**
+  Nach Wechsel von `#245582` zu `#AD2436` ohne erneutes
+  Rendern bestätigte der Nutzer das Verschwinden der alten
+  Videovorschau. **Markenfarbe-1-Teilfunktion praxisabgenommen.**
+  Weitere Vorlagen, Fonts, Layouts und Verkaufsfreigabe bleiben
+  offen; vollständiges F2-02-Brand-Kit bleibt [ ].
   **Erster Logo-Browser-Export 15.11.2026 visuell bestanden:**
   0,5-s-Fade, Text und Logo durchgehend, aber wegen
   `shortest=1` beim geloopten PNG **nur 131 statt 132 Frames**
