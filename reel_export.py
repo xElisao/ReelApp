@@ -179,7 +179,7 @@ def _append_reel_logo_overlay(
     graph.append(
         f"[{output_video_label}][{logo_input_index}:v:0]"
         f"overlay=x=W-w-{LOGO_MARGIN_RIGHT}:y={LOGO_MARGIN_TOP}:"
-        "shortest=1:format=auto,"
+        "shortest=0:format=auto,"
         "format=yuv420p,settb=AVTB,fps=24"
         "[video_logo]"
     )
@@ -485,6 +485,13 @@ def render_test_reel(
             "-filter_complex", ";".join(graph),
             "-map", f"[{output_video_label}]",
         ])
+        if logo_png_bytes is not None:
+            # Das ge-loopte PNG ist unendlich lang. shortest=1 in overlay
+            # würde bei FFmpeg das LETZTE Videoframe verlieren (131 statt
+            # 132 bei einem 5,5-s-Reel mit 24 fps). Durch shortest=0
+            # plus feste Gesamtdauer bleibt das letzte Frame erhalten,
+            # ohne einen unendlich langen Export zu erzeugen.
+            cmd.extend(["-t", f"{total_seconds:.6f}"])
         if audio_mode == "original":
             cmd.extend([
                 "-map", "[audio]", "-c:a", "aac", "-b:a", "128k",
