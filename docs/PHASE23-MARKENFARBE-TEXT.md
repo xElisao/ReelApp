@@ -81,14 +81,28 @@ Kein zusätzlicher KI-Aufruf.
 - [x] Strenge HEX-Validierung und automatische schwarz/weiß-Schrift
 - [x] Neue automatisierte Testfälle geschrieben
 - [x] GitHub-CI-Lauf: 180 Tests + Python 3.12/3.13 grün
-- [ ] **Realer Benutzer-Praxistest:** Staging-App über
-      Reboot neu starten, Label `Markenfarbe 1 | 2026-11-15`
-      prüfen. Bekannte 2 Landschaftsclips ohne neue KI-Analyse
-      laden; Titel `Bergstraßen entdecken`, CTA
-      `Mehr entdecken`, 0,5-s-Fade, DEMO-Logo falls gewünscht.
-      `Firmenfarbe für die Textflächen verwenden` einschalten,
-      z. B. `#245582` (Blau) wählen, MP4 exportieren und
-      hier im Chat hochladen. Unabhängig Video und Farben prüfen.
+- [x] **Realer Benutzer-Praxistest 15.11.2026 bestanden:**
+      Nutzer hat nach Reboot/Versionsbestätigung `Markenfarbe 1`
+      das 32-s-Landschaftsvideo mit gespeichertem JSON ohne
+      neue KI analysieren zu lassen erneut geladen, zwei Szenen
+      mit 0,5-s-Fade, Titel `Bergstraßen entdecken`, Schlusszeile
+      `Mehr entdecken`, DEMO-PNG-Logo und blauem Titel-/CTA-
+      Hintergrund `#245582` exportiert und das **echte** MP4
+      `velocut_test_reel_9x16_blur_mute_fade_050cs_text_brand_logo.mp4`
+      im Chat bereitgestellt. Unabhängig per `ffprobe` bestätigt:
+      **5,500000 s, 132 Frames, 24 fps, H.264, 540 × 960,
+      281.469 Bytes**, keine Audiospur. Vollständiges Decoding
+      mit FFmpeg **ohne Fehler**. An **16 extrahierten Frames**
+      bei 0,30 / 0,80 / 1,50 / 1,85 / 2,15 / 2,48 / 2,62 /
+      2,75 / 2,90 / 3,10 / 3,45 / 3,65 / 4,00 / 4,80 /
+      5,20 / 5,45 s visuell bestätigt: Titel in weißer Schrift
+      auf der gewählten blauen Fläche nur am Anfang, CTA auf
+      gleicher Fläche am Ende, DEMO-Logo durchgehend rechts oben;
+      weiche Überblendung der zwei Landschaften etwa 2,5–3,0 s.
+      Kein sichtbarer Text- oder Logo-Beschnitt. Video und
+      Titel-/CTA-Farbflächen sind korrekt – **Browser-Abnahme
+      der Farb-Teilfunktion bestanden**. Die MP4 selbst wurde
+      nicht im GitHub-Repository abgelegt.
 - [ ] **Browser-Cache-Test** nach Farbwechsel ohne Neu-Export.
 - [ ] Weitere Designoptionen (Fonts, Templates, Layouts,
       Social-Safe-Areas) und kommerzieller Plattform-Check.
