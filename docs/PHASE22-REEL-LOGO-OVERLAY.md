@@ -114,12 +114,24 @@ Kein API-Konto, keine KI-Kosten für Tests.
       jeweils mit Logo+Text und optionalem Audio.
       **176/176 Tests grün**, Staging Python 3.12/3.13 grün.
       Versionslabel **`Logo-Frame-Fix 1 | 2026-11-15`**.
-- [ ] **Browser-Nachtest des korrigierten Exports**:
-      Streamlit rebooten, Label `Logo-Frame-Fix 1`
-      verifizieren und mit gleicher Auswahl erneut exportieren.
-      Die neue MP4 muss exakt **5,500 s / 132 Frames**
-      lang sein (und alle bisherigen sichtbaren Einblendungen
-      und den Fade weiterhin zeigen).
+- [x] **Browser-Nachtest des korrigierten Exports bestanden (15.11.2026):**
+      Der Nutzer hat nach Neustart und Label `Logo-Frame-Fix 1`
+      die Datei `velocut_test_reel_9x16_blur_mute_fade_050cs_text_logo (2).mp4`
+      aus der Staging-App hochgeladen. Unabhängige Medienprüfung:
+      **5,500000 Sekunden, exakt 132 Frames, 24 fps, H.264, 540 × 960**,
+      **282.696 Bytes**, nur Video ohne Audiospur. Vollständiges
+      FFmpeg-Dekodieren ohne Fehler bestätigt.
+      Frame-Stichproben bei 0,30 / 1,00 / 1,80 / 2,20 / 2,50 /
+      2,65 / 2,75 / 2,90 / 3,10 / 3,70 / 4,20 / 4,80 /
+      5,20 / 5,45 s zeigen das DEMO-Logo durchgehend rechts oben,
+      Einstiegstitel zu Beginn, saubere 0,5-s-Überblendung von
+      Bergstraße zu Bergtal bei ~2,5–3,0 s und die Schlusszeile
+      ab ca. 3,5 s bis zum vollständigen letzten Bild. Kein
+      sichtbarer Beschnitt; vorher fehlendes Schlussframe ist
+      **im realen Benutzerexport wieder enthalten**.
+      Die Teilfunktion **PNG-Logo + Text + Fade ist praxisbestätigt**.
+      Weitere Logo-Formate/Markenfarben und der manuelle Logo-Wechsel-
+      Cachetest stehen noch aus.
 - [ ] **Browser-Cache-Test**: Logo entfernen oder wechseln,
       alte MP4-Vorschau muss ohne Export verschwinden.
 - [ ] Visuelle Prüfung auf anderen Bildern/Logoformaten,
