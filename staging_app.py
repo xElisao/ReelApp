@@ -31,12 +31,12 @@ from timeline_frames import (
 from video_probe import VideoProbeError, probe_video
 from reel_export import (
     MAX_LOGO_BYTES, ReelExportError, ReelSegment, expected_reel_duration,
-    normalize_logo_png, render_test_reel,
+    normalize_brand_color, normalize_logo_png, render_test_reel,
 )
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Logo-Frame-Fix 1 | 2026-11-15"
+LAB_BUILD = "Markenfarbe 1 | 2026-11-15"
 
 
 st.set_page_config(
@@ -940,6 +940,7 @@ if clips_to_show:
     )
     reel_title_text = ""
     reel_cta_text = ""
+    reel_brand_color = None
     if reel_text_enabled:
         reel_title_text = st.text_input(
             "Titel am Anfang",
@@ -963,6 +964,28 @@ if clips_to_show:
         )
         if not reel_title_text and not reel_cta_text:
             st.info("Trage einen Titel oder eine Schlusszeile ein, um Text einzublenden.")
+        brand_color_enabled = st.checkbox(
+            "Firmenfarbe für die Textflächen verwenden",
+            value=False,
+            key=f"velocut_reel_brand_color_enabled_{preview_identifier}",
+            help=(
+                "Färbt die Hintergründe von Titel und Schlusszeile. "
+                "Schwarze oder weiße Schrift wird automatisch "
+                "für gute Lesbarkeit ausgewählt."
+            ),
+        )
+        if brand_color_enabled:
+            selected_brand_color = st.color_picker(
+                "Markenfarbe für Titel und Schlusszeile",
+                value="#245582",
+                key=f"velocut_reel_brand_color_{preview_identifier}",
+            )
+            reel_brand_color = normalize_brand_color(selected_brand_color)
+            st.caption(
+                "Die Farbfläche ist für gute Lesbarkeit vollständig deckend. "
+                "Die Schrift wird automatisch schwarz oder weiß. "
+                "Das Logo behält seine eigenen Farben."
+            )
 
     st.markdown("##### 🏷️ Firmenlogo (optional)")
     logo_upload = st.file_uploader(
@@ -1080,7 +1103,7 @@ if clips_to_show:
                 preview_identifier, reel_order, reel_background_mode,
                 reel_audio_mode, reel_transition_mode,
                 reel_fade_duration, reel_title_text, reel_cta_text,
-                reel_logo_signature, selected_edits_signature,
+                reel_brand_color, reel_logo_signature, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -1139,6 +1162,7 @@ if clips_to_show:
                     title_text=reel_title_text,
                     cta_text=reel_cta_text,
                     logo_png_bytes=reel_logo_bytes,
+                    brand_color=reel_brand_color,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1167,6 +1191,7 @@ if clips_to_show:
                 f"{reel_audio_mode}_{reel_transition_mode}"
                 f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}"
                 f"{'_text' if reel_title_text or reel_cta_text else ''}"
+                f"{'_brand' if reel_brand_color is not None else ''}"
                 f"{'_logo' if reel_logo_bytes is not None else ''}.mp4"
             ),
             mime="video/mp4",
