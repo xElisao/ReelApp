@@ -68,15 +68,19 @@ Neue Datei `tests/test_reel_brand_color.py` mit vier Tests:
    Die Video-Pixel werden farblich geprüft; Laufzeiten,
    genaue Frameanzahl, Auflösung und Tonspuren ebenfalls.
 
-**Automatische Gesamt-Tests:** 176 bestehende + 4 neue.
-CI-Status wird nach dem GitHub-Lauf gesondert bestätigt.
+**Automatische Gesamt-Tests erfolgreich:** **180/180**
+(176 bestehende + 4 neue). GitHub Actions PR-Lauf
+`43731455767` auf Commit `c059aee4`: `unit-tests` grün,
+inklusive realer FFmpeg-MP4s und Farbpixelprüfung;
+Staging-Abhängigkeiten für Python 3.12/3.13 ebenfalls grün.
+Kein zusätzlicher KI-Aufruf.
 
 ## Noch ausstehend
 
 - [x] Optionaler Farbpicker, Default-Aus, Cache-Invalidierung im Code
 - [x] Strenge HEX-Validierung und automatische schwarz/weiß-Schrift
 - [x] Neue automatisierte Testfälle geschrieben
-- [ ] GitHub-CI-Lauf für diese neuen Testfälle abschließend prüfen
+- [x] GitHub-CI-Lauf: 180 Tests + Python 3.12/3.13 grün
 - [ ] **Realer Benutzer-Praxistest:** Staging-App über
       Reboot neu starten, Label `Markenfarbe 1 | 2026-11-15`
       prüfen. Bekannte 2 Landschaftsclips ohne neue KI-Analyse
