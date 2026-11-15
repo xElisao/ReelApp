@@ -155,7 +155,14 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   176 automatische Tests erfolgreich, einschließlich
   echter FFmpeg-Exports mit Text, Fade und Originalton.
   [PHASE22-REEL-LOGO-OVERLAY.md](PHASE22-REEL-LOGO-OVERLAY.md).
-  Browser-Abnahme eines echten Logo-Reels **noch offen**.
+  **Erster Logo-Browser-Export 15.11.2026 visuell bestanden:**
+  0,5-s-Fade, Text und Logo durchgehend, aber wegen
+  `shortest=1` beim geloopten PNG **nur 131 statt 132 Frames**
+  (5,458333 statt 5,5 s). **Bugfix im Branch:** `shortest=0`
+  mit Output-Gesamtdauer `-t`; 176 Tests inklusive **exakter
+  Frameanzahl 144 bei Cut / 132 bei Fade** erneut grün.
+  Version `Logo-Frame-Fix 1 | 2026-11-15`; **Browser-Nachtest
+  der korrigierten MP4 noch offen**, ebenso Logo-Cache-Wechsel.
   **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
   15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
   Titel zu Beginn, CTA am Schluss visuell bestätigt.
@@ -319,12 +326,12 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**Jetzt:** Geschützte Staging-Test-App rebooten und Version
-`Logo-Overlay 1 | 2026-11-15` kontrollieren. Danach das
-bereits vorhandene Landschafts-Testvideo + gespeicherte
-Vorschau ohne neue KI laden, ein **neutrales PNG-Testlogo**
-im neuen Logo-Upload verwenden und den echten MP4-Export
-mit Fade + Text + Logo zur unabhängigen Sichtprüfung hochladen.
+**Jetzt:** Geschützte Staging-App rebooten und Versionslabel
+`Logo-Frame-Fix 1 | 2026-11-15` kontrollieren; bei gleichem
+Video/Logo/Text mit 0,5-s-Fade nochmals ohne neue KI
+exportieren. Der neue MP4-Nachtest soll die 5,500 s bzw.
+132 Frames und die unverändert korrekte Bildgestaltung
+bestätigen (Vorversion verlor ein Schlussframe).
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
