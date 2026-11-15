@@ -103,7 +103,15 @@ Kein zusätzlicher KI-Aufruf.
       Titel-/CTA-Farbflächen sind korrekt – **Browser-Abnahme
       der Farb-Teilfunktion bestanden**. Die MP4 selbst wurde
       nicht im GitHub-Repository abgelegt.
-- [ ] **Browser-Cache-Test** nach Farbwechsel ohne Neu-Export.
+- [x] **Browser-Cache-Test nach Farbwechsel bestanden (15.11.2026):**
+      Nach erfolgreichem blauem MP4-Export änderte der Nutzer
+      **nur die Firmenfarbe** von `#245582` (Blau) zu
+      `#AD2436` (Rot), **ohne erneut zu rendern**, und
+      bestätigte, dass die bisherige Videovorschau verschwunden
+      ist. Der bisherige Download ist ebenfalls an dieselbe
+      Reel-Signatur gebunden; er wurde nicht separat geprüft.
+      Damit ist die Teilfunktion **Markenfarbe 1 einschließlich
+      manueller Browser-Cache-Invalidierung abgenommen**.
 - [ ] Weitere Designoptionen (Fonts, Templates, Layouts,
       Social-Safe-Areas) und kommerzieller Plattform-Check.
 
