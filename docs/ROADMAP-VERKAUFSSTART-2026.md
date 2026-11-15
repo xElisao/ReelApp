@@ -65,6 +65,13 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   klare Top-3-Aufgaben; kein vorab unterstellter Product-Market-Fit.
   **Arbeitsmaterial:** [PHASE18-KUNDENVALIDIERUNG.md](PHASE18-KUNDENVALIDIERUNG.md)
   (Fragen, Pilotkriterien, Datenschutzgrenze und unverbindliche Namensideen).
+  **Ergänzt 15.11.2026:**
+  [PHASE20-WETTBEWERBSMATRIX-2026.md](PHASE20-WETTBEWERBSMATRIX-2026.md)
+  mit OpusClip, Submagic, Reel-E, AutoReel, Kadapt, VideoMotion,
+  Shorty und Reslate: **auch Immobilien-Rohvideo-KI ist kompetitiv**.
+  Priorität für erste Demo: optionaler Titel/CTA und anschließend
+  Branchenstory aus vorhandenen echten Szenen, ohne neue KI-Kosten.
+  Weiterhin **keine** Kontakte und **keine** Zahlungsbereitschaft belegt.
   **Desk Research vom 13.11.2026 durchgeführt – ohne Outreach:**
   [PHASE19-DESK-RESEARCH-2026.md](PHASE19-DESK-RESEARCH-2026.md).
   Nachfrage- und Konkurrenzsignale vorhanden; Immobilienmakler und
