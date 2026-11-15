@@ -36,7 +36,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Logo-Overlay 1 | 2026-11-15"
+LAB_BUILD = "Logo-Frame-Fix 1 | 2026-11-15"
 
 
 st.set_page_config(
