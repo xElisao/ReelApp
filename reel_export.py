@@ -14,6 +14,8 @@ import math
 import shutil
 import subprocess
 import tempfile
+import textwrap
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
@@ -29,10 +31,88 @@ AUDIO_MODES = frozenset({"mute", "original"})
 TRANSITION_MODES = frozenset({"cut", "fade"})
 FADE_SECONDS = 0.5  # Alter Standard, auch für bestehende Aufrufer.
 FADE_DURATIONS = frozenset({0.25, 0.5, 1.0})
+MAX_OVERLAY_CHARACTERS = 56
+OVERLAY_FONT_PATH = Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
+OVERLAY_DURATION_SECONDS = 2.0
 
 
 class ReelExportError(RuntimeError):
     """Ungültige Reel-Auswahl oder lokaler FFmpeg-Fehler."""
+
+
+def normalize_overlay_text(value: str) -> str:
+    """Prüft optionalen Bildschirmtext vor jeglichem FFmpeg-Aufruf.
+
+    Benutzereingaben gelangen nur in eine temporäre UTF-8-Textdatei,
+    niemals in Kommandoargumente oder den FFmpeg-Filterausdruck.
+    """
+    if not isinstance(value, str):
+        raise ReelExportError("Texteinblendungen müssen normale Texte sein.")
+    text = unicodedata.normalize("NFC", value.strip())
+    if len(text) > MAX_OVERLAY_CHARACTERS:
+        raise ReelExportError(
+            f"Eine Texteinblendung darf höchstens {MAX_OVERLAY_CHARACTERS} "
+            "Zeichen enthalten."
+        )
+    if any(unicodedata.category(char).startswith("C") for char in text):
+        raise ReelExportError(
+            "Texteinblendungen dürfen keine Steuer- oder Zeilenumbruchzeichen enthalten."
+        )
+    return text
+
+
+def _append_reel_text_overlays(
+    graph: list[str],
+    target: Path,
+    total_seconds: float,
+    title_text: str,
+    cta_text: str,
+) -> str:
+    """Blendet optionale Texte in sicheren Bereichen ein, ohne KI-Aufruf.
+
+    Separate Textdateien + expansion=none verhindern, dass Eingaben
+    als Filter-Syntax bzw. drawtext-Expressions interpretiert werden.
+    Die Schrift wird auf dem Testserver über das Debian-Paket
+    fonts-dejavu-core bereitgestellt (nicht mit dem MP4 ausgeliefert).
+    """
+    if not (title_text or cta_text):
+        return "video"
+    if not OVERLAY_FONT_PATH.is_file():
+        raise ReelExportError(
+            "Die Schriftart für Texteinblendungen fehlt auf dem Testserver."
+        )
+    output_label = "video"
+    visible_seconds = min(OVERLAY_DURATION_SECONDS, total_seconds / 2.0)
+    for kind, text in (("title", title_text), ("cta", cta_text)):
+        if not text:
+            continue
+        text_path = target / f"overlay_{kind}.txt"
+        lines = textwrap.wrap(
+            text, width=16, break_long_words=True, break_on_hyphens=False,
+        )
+        text_path.write_text("\n".join(lines), encoding="utf-8")
+        # Diese Pfade stammen nur aus unserem temporären Serververzeichnis.
+        # Der Nutzer kann weder Pfad noch Filtergraph bestimmen.
+        if kind == "title":
+            enable = f"lt(t,{visible_seconds:.6f})"
+            y = "150"
+        else:
+            enable = f"gte(t,{total_seconds - visible_seconds:.6f})"
+            y = "h-185-text_h"
+        next_label = f"reel_{kind}"
+        graph.append(
+            f"[{output_label}]drawtext="
+            f"fontfile='{OVERLAY_FONT_PATH.as_posix()}':"
+            f"textfile='{text_path.as_posix()}':"
+            "expansion=none:fontsize=30:fontcolor=white:"
+            "box=1:boxcolor=black@0.65:boxborderw=16:"
+            "line_spacing=6:"
+            "x=(w-text_w)/2:"
+            f"y={y}:enable='{enable}'"
+            f"[{next_label}]"
+        )
+        output_label = next_label
+    return output_label
 
 
 @dataclass(frozen=True)
@@ -162,6 +242,8 @@ def render_test_reel(
     audio_mode: str = "mute",
     transition_mode: str = "cut",
     fade_duration_seconds: float = FADE_SECONDS,
+    title_text: str = "",
+    cta_text: str = "",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -176,11 +258,15 @@ def render_test_reel(
     weichgezeichnetem Bildmaterial, "black" bietet den alten Letterbox-Modus.
     "cut" verbindet direkt; "fade" überblendet mit wählbarer Dauer
     (0,25, 0,5 oder 1,0 s) per xfade und synchronem acrossfade.
+    Optionale Titel und Schlusszeilen werden erst NACH den Szenenübergängen
+    rein lokal ins MP4 gerendert; sie ändern die Laufzeit nicht.
     """
-    expected_reel_duration(
+    total_seconds = expected_reel_duration(
         segments, transition_mode=transition_mode,
         fade_duration_seconds=fade_duration_seconds,
     )
+    title_text = normalize_overlay_text(title_text)
+    cta_text = normalize_overlay_text(cta_text)
     if background_mode not in BACKGROUND_MODES:
         raise ReelExportError("Unbekannter Hintergrundmodus.")
     if audio_mode not in AUDIO_MODES:
@@ -305,10 +391,13 @@ def render_test_reel(
                 "".join(f"[v{i}]" for i in range(len(segments)))
                 + f"concat=n={len(segments)}:v=1:a=0[video]"
             )
+        output_video_label = _append_reel_text_overlays(
+            graph, target, total_seconds, title_text, cta_text,
+        )
         destination = target / "velocut_test_reel.mp4"
         cmd.extend([
             "-filter_complex", ";".join(graph),
-            "-map", "[video]",
+            "-map", f"[{output_video_label}]",
         ])
         if audio_mode == "original":
             cmd.extend([
