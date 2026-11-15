@@ -132,8 +132,14 @@ Kein API-Konto, keine KI-Kosten für Tests.
       Die Teilfunktion **PNG-Logo + Text + Fade ist praxisbestätigt**.
       Weitere Logo-Formate/Markenfarben und der manuelle Logo-Wechsel-
       Cachetest stehen noch aus.
-- [ ] **Browser-Cache-Test**: Logo entfernen oder wechseln,
-      alte MP4-Vorschau muss ohne Export verschwinden.
+- [x] **Browser-Cache-Test für Logoentfernung bestanden (15.11.2026):**
+      Nutzer hat nach dem erfolgreichen MP4-Export **nur das
+      DEMO-Logo entfernt**, ohne einen neuen Export zu starten,
+      und mit „ja“ bestätigt, dass die bisherige Videovorschau
+      wie erwartet verschwunden ist. Der Download verwendet
+      dieselbe Export-Signatur-Bedingung, wurde nicht separat
+      bestätigt. **Logo ersetzen** statt entfernen ist noch kein
+      eigenständiger manueller Test.
 - [ ] Visuelle Prüfung auf anderen Bildern/Logoformaten,
       später Layoutoptionen, Farben, größere Exportauflösung.
 - [ ] Marken-/Logo-Nutzungsrechte und Kundendatenschutz
