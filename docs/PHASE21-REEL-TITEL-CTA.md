@@ -79,9 +79,23 @@ der neue Abschnitt **`✍️ Texteinblendungen (optional)`**.
   und Länge, keine Nutzereingabe als FFmpeg-Filterausdruck.
 - Systempakete im Staging bei Deployment prüfen
   (die Linux-CI-Tests hatten DejaVu installiert).
-- **Browser-Praxistest der Streamlit-App noch offen.**
-  Ein automatisierter Test ersetzt keine Prüfung des realen Exports
-  auf dem Testserver mit Originalvideo.
+- **Browser-Praxistest des echten Streamlit-Exports am 15.11.2026 bestanden:**
+  Nutzer hat `velocut_test_reel_9x16_blur_mute_cut_text.mp4`
+  hochgeladen. Unabhängig per `ffprobe` geprüft: **6,000 Sekunden**, 
+  **H.264**, **540×960**, **24 fps**, **144 Frames**, **keine Tonspur**.
+  Unabhängig extrahierte Frames bei 0,25 / 0,9 / 1,85 Sekunden zeigen
+  sichtbar `Bergstraßen entdecken` in zwei Zeilen mit dunkler Fläche;
+  bei 2,15 / 2,9 Sekunden nicht mehr. Bei 3,1 / 3,9 Sekunden
+  noch keine Schlusszeile; bei 4,15 / 4,65 / 5,25 / 5,85 Sekunden
+  sichtbar `Mehr entdecken`. Szenenwechsel am 3,0-s-Schnitt:
+  Bergstraße zu grünem Gebirgstal, ohne augenfälligen Bildfehler.
+  Auf dem Bild sind beide Texte gut lesbar, kontrastreich und
+  ohne sichtbaren Beschnitt.
+  **Wichtig:** Dieses reale Benutzer-MP4 ist ein **direkter Schnitt**
+  (`_cut_text.mp4`), *kein* echter Text-plus-Fade-Browser-Test.
+  Text+Fade ist über FFmpeg-CI bereits getestet, echtes Benutzer-MP4
+  für die Kombination steht noch aus. MP4 lokal geprüft, nicht
+  als sensibles Testmaterial ins Repository kopiert.
 
 ## Nächster manueller Schritt (einzeln testen)
 
@@ -97,6 +111,10 @@ der neue Abschnitt **`✍️ Texteinblendungen (optional)`**.
    getrennt den Test ohne Text bestätigen.
 6. Manuell einen Titel ändern: älteres MP4 darf bis zum nächsten
    erneuten Export nicht als aktuell angezeigt werden.
+
+**Stand der Praxisabnahme:** Titel, CTA und Cut-Export per Nutzer-MP4
+bestätigt. Stale-Cache-Prüfung nach Texteingabe und echter Fade+
+Text-Export bleiben für spätere Regressionstests offen.
 
 **Wichtig:** Staging ist weiterhin keine für Fremdkunden
 freigegebene kommerzielle Anwendung.
