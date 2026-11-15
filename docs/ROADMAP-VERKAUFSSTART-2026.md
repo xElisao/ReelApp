@@ -161,8 +161,15 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   (5,458333 statt 5,5 s). **Bugfix im Branch:** `shortest=0`
   mit Output-Gesamtdauer `-t`; 176 Tests inklusive **exakter
   Frameanzahl 144 bei Cut / 132 bei Fade** erneut grün.
-  Version `Logo-Frame-Fix 1 | 2026-11-15`; **Browser-Nachtest
-  der korrigierten MP4 noch offen**, ebenso Logo-Cache-Wechsel.
+  Version `Logo-Frame-Fix 1 | 2026-11-15`.
+  **Korrigierter Benutzer-MP4-Nachtest am 15.11.2026 bestanden:**
+  `velocut_test_reel_9x16_blur_mute_fade_050cs_text_logo (2).mp4`;
+  **exakt 5,500 s / 132 Frames**, H.264, 540×960, 24 fps,
+  vollständig fehlerfrei dekodierbar. Stichproben bestätigen
+  durchgehend sichtbares DEMO-Logo, Titel am Anfang, CTA am Ende,
+  weiche Überblendung und das wiederhergestellte Schlussframe.
+  **Logo-/Text-/Fade-Teilfunktion praxisabgenommen**; weiterhin
+  Logo-Wechsel-Cachetest und vollständiges Brand Kit offen.
   **Browser-Praxistest für Titel/CTA mit direktem Schnitt am
   15.11.2026 bestanden:** echtes Nutzer-MP4 6,0 s, 540×960, 24 fps;
   Titel zu Beginn, CTA am Schluss visuell bestätigt.
