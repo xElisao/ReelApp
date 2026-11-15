@@ -2,7 +2,7 @@
 
 **Stand:** 15.11.2026, geschützte Branch `feature/velocut-2-video-analysis`.
 **Produktive Live-App und `main` unverändert.** Markenname bleibt vorläufig intern VeloCut.
-**Status:** implementiert, 176 Tests/CI erfolgreich; **Nutzer-Browser-Praxistest noch offen**.
+**Status:** implementiert, 176 Tests/CI erfolgreich; visueller Nutzer-Browser-Test bestanden, dabei **ein fehlendes Schlussframe erkannt**. Exportfix CI-bestätigt, **Browser-Nachtest der korrigierten Version steht noch aus**.
 
 ## Ziel und Bedienung
 
@@ -46,9 +46,15 @@ In `reel_export.py`:
 - FFmpeg erhält `-loop 1 -framerate 24 -i` mit diesem
   bereinigten Logo als zusätzlichen Eingang. Das Overlay
   wird **nach** allen Überblendungen und Texteinblendungen
-  hinzugefügt: `overlay=x=W-w-32:y=48:shortest=1:format=auto`,
+  hinzugefügt: `overlay=x=W-w-32:y=48:shortest=0:format=auto`,
   gefolgt von `format=yuv420p,settb=AVTB,fps=24`.
-  Logo ist damit auch während Übergängen sichtbar.
+  Gleichzeitig begrenzt FFmpeg den *gesamten Output* mit `-t`
+  auf die erwartete Reel-Dauer. **Warum:** `shortest=1` bei
+  Endlos-Logo-Input schnitt das letzte 24-fps-Frame ab (131
+  statt 132 Frames bei 5,5 s). `shortest=0` + `-t`
+  bewahrt die vollständige berechnete Laufzeit. Das Logo
+  bleibt während Übergängen sichtbar und der Loop läuft
+  nicht unendlich.
 - Ungültige Bilddateien stoppen den Export vor jedem
   FFmpeg-Aufruf. Fehlerdaten/Originalmetadaten werden
   nicht ins UI übernommen.
@@ -84,13 +90,36 @@ Kein API-Konto, keine KI-Kosten für Tests.
 - [x] Text-/Fade-/Audio-Kompatibilität mit echten FFmpeg-Testvideos
 - [x] Alte Reel-Signatur wird bei Logo-Wechsel ungültig
       (Code implementiert)
-- [ ] **Echter Benutzer-Browser-Test mit Testlogo**:
-      Staging App rebooten, `Logo-Overlay 1 | 2026-11-15`
-      prüfen, bekanntes 32-s-Landschaftsvideo und
-      gespeichertem Ergebnis ohne KI laden.
-      Demo-PNG hochladen, Titel und CTA nach Wunsch
-      belassen, Fade 0,5 s auswählen, MP4 exportieren,
-      zur Bildprüfung in Chat hochladen.
+- [x] **Erster echter Benutzer-Browser-Test mit Testlogo**
+      (15.11.2026): geschützte App `Logo-Overlay 1`,
+      zwei Landschaftsclips aus gespeichertem Ergebnis
+      **ohne neue KI-Analyse**; 0,5-s-Fade, Titel,
+      Schlusszeile und transparentes Demo-Logo im MP4.
+      Upload `velocut_test_reel_9x16_blur_mute_fade_050cs_text_logo (1).mp4`.
+      Unabhängiges `ffprobe`: H.264, 540×960, 24 fps, **131 Frames**,
+      **5,458333 s**, 281.697 B, stumm, vollständige Dekodierung.
+      Visuell geprüft auf 15 Frames (0,3 bis 5,4 s):
+      Logo durchgehend rechts oben; Titel zu Beginn gut lesbar;
+      0,5-s-Fade zeigt beide Landschaften gemeinsam um
+      2,65–2,9 s; `Mehr entdecken` ab etwa 3,7 s.
+      Keine groben visuellen Fehler. **Ein Schlussframe
+      fehlte jedoch gegenüber dem erwarteten 5,5-s-Reel**
+      (132 Frames); daher ist dieser Browser-Build **nicht
+      vollständig abgenommen**.
+- [x] **Bugfix für ein fehlendes Schlussframe in GitHub
+      implementiert und CI-getestet** (15.11.2026):
+      in `reel_export.py` `overlay shortest=0` plus `-t`,
+      Regressionstests erwarten **exakt 144 Frames / 6,0 s**
+      bei Cut und **132 Frames / 5,5 s** bei 0,5-s-Fade,
+      jeweils mit Logo+Text und optionalem Audio.
+      **176/176 Tests grün**, Staging Python 3.12/3.13 grün.
+      Versionslabel **`Logo-Frame-Fix 1 | 2026-11-15`**.
+- [ ] **Browser-Nachtest des korrigierten Exports**:
+      Streamlit rebooten, Label `Logo-Frame-Fix 1`
+      verifizieren und mit gleicher Auswahl erneut exportieren.
+      Die neue MP4 muss exakt **5,500 s / 132 Frames**
+      lang sein (und alle bisherigen sichtbaren Einblendungen
+      und den Fade weiterhin zeigen).
 - [ ] **Browser-Cache-Test**: Logo entfernen oder wechseln,
       alte MP4-Vorschau muss ohne Export verschwinden.
 - [ ] Visuelle Prüfung auf anderen Bildern/Logoformaten,
