@@ -136,6 +136,7 @@ class LogoValidationTests(unittest.TestCase):
             logo_path = Path(inputs[-1])
             captured["graph"] = graph
             captured["map"] = cmd[cmd.index("-map") + 1]
+            captured["duration"] = cmd[cmd.index("-t") + 1]
             captured["path"] = logo_path.name
             captured["logo"] = logo_path.read_bytes()
             Path(cmd[-1]).write_bytes(FAKE_MP4)
@@ -149,8 +150,9 @@ class LogoValidationTests(unittest.TestCase):
             )
         self.assertEqual(result, FAKE_MP4)
         self.assertEqual(captured["map"], "[video_logo]")
+        self.assertEqual(captured["duration"], "6.000000")
         self.assertEqual(captured["path"], "brand_logo.png")
-        self.assertIn("overlay=x=W-w-32:y=48:shortest=1:format=auto", captured["graph"])
+        self.assertIn("overlay=x=W-w-32:y=48:shortest=0:format=auto", captured["graph"])
         self.assertIn("[video][2:v:0]overlay=", captured["graph"])
         self.assertNotIn(b"PRIVATE TEST METADATA", captured["logo"])
 
@@ -181,7 +183,12 @@ class LogoRealVideoTests(unittest.TestCase):
                     info = video_info(output)
                     expected = 5.5 if mode == "fade" else 6.0
                     self.assertAlmostEqual(
-                        float(info["format"]["duration"]), expected, delta=0.08
+                        float(info["format"]["duration"]), expected, delta=0.00001
+                    )
+                    self.assertEqual(
+                        int(info["streams"][0]["nb_frames"]),
+                        round(24 * expected),
+                        "Das letzte Videoframe darf durch das Logo nicht wegfallen.",
                     )
                     self.assertEqual(
                         (info["streams"][0]["width"], info["streams"][0]["height"]),
