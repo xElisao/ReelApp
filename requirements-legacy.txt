@@ -1,0 +1,11 @@
+# Archiv der bisherigen App-Abhängigkeiten für spätere Migration.
+# NICHT von der separaten Streamlit-Staging-App installieren.
+# Nicht für das aktuelle Deployment bestimmt.
+streamlit>=1.40,<2
+openai>=1.30,<3
+fastapi>=0.100,<1
+uvicorn>=0.27,<1
+stripe>=8,<15
+moviepy==1.0.3
+Pillow<10
+numpy<2

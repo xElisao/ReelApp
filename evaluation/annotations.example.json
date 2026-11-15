@@ -1,0 +1,17 @@
+{
+  "goal_name": "Action-Beispiel",
+  "reference_highlights": [
+    {
+      "source_id": "video-1",
+      "start_seconds": 2,
+      "end_seconds": 4,
+      "label": "Beispiel: interessantes Ereignis"
+    },
+    {
+      "source_id": "video-1",
+      "start_seconds": 6,
+      "end_seconds": 8,
+      "label": "Beispiel: zweiter Moment"
+    }
+  ]
+}
