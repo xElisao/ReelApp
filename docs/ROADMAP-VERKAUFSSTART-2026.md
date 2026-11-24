@@ -176,7 +176,16 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   **184/184 automatische Tests grün**, inklusive echter
   MP4-Renderings beider Designs mit Text, Farbe und Logo.
   [PHASE24-DESIGNVORLAGEN.md](PHASE24-DESIGNVORLAGEN.md).
-  **Nutzer-Browser-Praxistest und Cache-Wechseltest stehen noch aus.**
+  **Realer Nutzer-MP4-Test mit Design Modern am 24.11.2026
+  bestanden:** Datei
+  `velocut_test_reel_9x16_blur_mute_fade_050cs_text_brand_modern_logo.mp4`
+  unabhängig geprüft: **5,500 s, 132 Frames, 24 fps, 540×960,
+  H.264, ohne Ton**, fehlerfreier FFmpeg-Decode.
+  16 Stichprobenframes und tatsächliches letztes Bild (Nr. 131)
+  zeigen tiefer platzierten **linksbündigen** Titel/CTA,
+  dunkelblaue Fläche `#245582` mit weißer lesbarer Schrift,
+  Logo über gesamtes Reel und korrekten 0,5-s-Fade.
+  **Browser-Cache-Test bei Wechsel Modern → Klassisch noch offen.**
   **Realer Browser-Praxistest Markenfarbe am 15.11.2026 bestanden:**
   echtes Nutzer-MP4 mit `#245582`, Titel/CTA, DEMO-Logo,
   0,5-s-Fade und unscharfem Hintergrund. Unabhängig geprüft:
@@ -372,20 +381,18 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**Jetzt:** Geschützte Streamlit-Test-App rebooten und
-die Versionskennung `Designvorlagen 1 | 2026-11-24` prüfen.
-Danach mit dem gespeicherten 32-s-Landschafts-Testvideo und
-dem bereits vorhandenen Analyse-JSON **ohne neue KI-Kosten**
-zwei Clips laden. Text + CTA aktivieren, **Modern
-(linksbündig)** als Design wählen, optional die bekannte
-blaue Firmenfarbe und das DEMO-Logo übernehmen,
-0,5-s-Überblendung auswählen und den MP4-Export
-für die erste unabhängige visuelle Browserprüfung hochladen.
+**Jetzt:** Im bestehenden, erfolgreich exportierten
+**Modern-Reel** nur die Designvorlage auf
+`Klassisch (wie bisher)` zurückstellen – **ohne** erneut
+`Reel verbinden` zu klicken. Die vorherige Videovorschau
+mit dem Modern-Layout muss wegen geänderter Reel-Signatur
+verschwinden. Nach Nutzerrückmeldung den manuellen
+Cache-Test dokumentieren.
 
-**Bereits abgenommen:** Text-Overlay 1, Logo-Overlay 1,
-Markenfarbe 1 einschließlich der jeweiligen Browser-
-Cachetests; die beiden Designvorlagen bislang nur technisch
-mit 184 automatischen Tests bestätigt.
+**Bereits bestätigt:** Text-Overlay 1, Logo-Overlay 1,
+Markenfarbe 1 und echtes Modern-Design-MP4 mit
+5,500 s / 132 Frames. 184/184 automatisierte Tests grün.
+Das vollständige F2-02-Brand-Kit bleibt offen.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
