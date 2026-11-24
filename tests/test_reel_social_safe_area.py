@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -100,7 +101,13 @@ class SafeAreaValidationTests(unittest.TestCase):
             render_test_reel(fake_segments(), title_text="Bergblick",
                              cta_text="Mehr entdecken", logo_png_bytes=make_logo(),
                              safe_area_mode="off")
-        self.assertEqual(graphs[0], graphs[1])
+        # Temporäre textfile-Pfade unterscheiden sich bei jedem Export.
+        # Alle übrigen Filtergraph-Optionen müssen identisch bleiben.
+        stable = [
+            re.sub(r"textfile='[^']+'", "textfile='<TEMP>'", graph)
+            for graph in graphs
+        ]
+        self.assertEqual(stable[0], stable[1])
         self.assertIn("boxborderw=16:line_spacing=6:x=(w-text_w)/2:y=150", graphs[0])
         self.assertIn("overlay=x=W-w-32:y=48", graphs[0])
 
@@ -193,7 +200,10 @@ class SafeAreaFFmpegTests(unittest.TestCase):
                     rgb = pixel_at(target, 0.6, 450, 85)
                     self.assertGreater(rgb[0], rgb[1], rgb)
                     # Blauer Titel innerhalb der sicheren Fläche.
-                    rgb = pixel_at(target, 0.6, 72, 280 if design == "classic" else 292)
+                    if design == "classic":
+                        rgb = pixel_at(target, 0.6, 120, 267)
+                    else:
+                        rgb = pixel_at(target, 0.6, 65, 280)
                     self.assertLess(rgb[0], 85, rgb)
                     self.assertGreater(rgb[2], rgb[0], rgb)
                     # Untere 35% enthalten nur die rote/blaue Videoszene.
