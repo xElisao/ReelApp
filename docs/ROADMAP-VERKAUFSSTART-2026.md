@@ -196,6 +196,9 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   Änderungen im Editor invalidieren die Vorschau-
   und Download-Signatur. Kein KI-API-Aufruf.
   [PHASE25-SOCIAL-SAFE-AREA.md](PHASE25-SOCIAL-SAFE-AREA.md).
+  **188/188 automatische Tests grün**, inklusive echter FFmpeg-
+  Exporte (Klassisch/Modern, Markenfarbe, PNG-Logo, Fade,
+  Originalton) und Testserver-Python 3.12/3.13.
   **Echter Nutzer-Browser-Test und Schutzmodus-Cache-Wechsel
   noch offen; keine universelle Plattformgarantie.**
   **Realer Nutzer-MP4-Test mit Design Modern am 24.11.2026
