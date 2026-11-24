@@ -201,7 +201,7 @@ class SafeAreaFFmpegTests(unittest.TestCase):
                     self.assertGreater(rgb[0], rgb[1], rgb)
                     # Blauer Titel innerhalb der sicheren Fläche.
                     if design == "classic":
-                        rgb = pixel_at(target, 0.6, 120, 267)
+                        rgb = pixel_at(target, 0.6, 225, 267)
                     else:
                         rgb = pixel_at(target, 0.6, 65, 280)
                     self.assertLess(rgb[0], 85, rgb)
