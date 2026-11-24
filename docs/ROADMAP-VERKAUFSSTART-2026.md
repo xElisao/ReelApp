@@ -185,7 +185,12 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   zeigen tiefer platzierten **linksbündigen** Titel/CTA,
   dunkelblaue Fläche `#245582` mit weißer lesbarer Schrift,
   Logo über gesamtes Reel und korrekten 0,5-s-Fade.
-  **Browser-Cache-Test bei Wechsel Modern → Klassisch noch offen.**
+  **Browser-Cache-Test beim Wechsel Modern → Klassisch
+  am 24.11.2026 bestanden:** Der Nutzer änderte ausschließlich
+  die Designvorlage, ohne neu zu exportieren, und bestätigte
+  ausdrücklich, dass die bisherige Modern-Videovorschau
+  verschwand. **Designvorlagen-1-Teilfunktion abgenommen**;
+  vollständiges F2-02-Brand-Kit bleibt weiterhin [ ].
   **Realer Browser-Praxistest Markenfarbe am 15.11.2026 bestanden:**
   echtes Nutzer-MP4 mit `#245582`, Titel/CTA, DEMO-Logo,
   0,5-s-Fade und unscharfem Hintergrund. Unabhängig geprüft:
