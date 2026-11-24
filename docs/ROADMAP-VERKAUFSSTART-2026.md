@@ -165,6 +165,18 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   inklusive echter Cut-/Fade-MP4-Exporte mit Logo, Text und Ton,
   sowie Python 3.12/3.13 Staging-Abhängigkeiten.
   [PHASE23-MARKENFARBE-TEXT.md](PHASE23-MARKENFARBE-TEXT.md).
+  **Designvorlagen-1-Teilfunktion 24.11.2026 implementiert:**
+  Für Titel und Schlusszeile stehen jetzt `Klassisch (wie bisher)`
+  und `Modern (linksbündig)` zur Auswahl. Klassisch ist
+  unverändert der Standard; Modern verwendet feste sichere
+  linksbündige Koordinaten, kleinere Textflächen und andere
+  Abstände. Beide funktionieren mit Markenfarbe, DEMO-/Kunden-PNG-Logo,
+  Schnitt/Fade und Originalton ohne zusätzliche KI.
+  Die Designauswahl ist in der Reel-Cache-Signatur.
+  **184/184 automatische Tests grün**, inklusive echter
+  MP4-Renderings beider Designs mit Text, Farbe und Logo.
+  [PHASE24-DESIGNVORLAGEN.md](PHASE24-DESIGNVORLAGEN.md).
+  **Nutzer-Browser-Praxistest und Cache-Wechseltest stehen noch aus.**
   **Realer Browser-Praxistest Markenfarbe am 15.11.2026 bestanden:**
   echtes Nutzer-MP4 mit `#245582`, Titel/CTA, DEMO-Logo,
   0,5-s-Fade und unscharfem Hintergrund. Unabhängig geprüft:
@@ -175,8 +187,8 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   Nach Wechsel von `#245582` zu `#AD2436` ohne erneutes
   Rendern bestätigte der Nutzer das Verschwinden der alten
   Videovorschau. **Markenfarbe-1-Teilfunktion praxisabgenommen.**
-  Weitere Vorlagen, Fonts, Layouts und Verkaufsfreigabe bleiben
-  offen; vollständiges F2-02-Brand-Kit bleibt [ ].
+  Weiterführende Layout-/Schriftoptionen und Verkaufsfreigabe
+  bleiben offen; vollständiges F2-02-Brand-Kit bleibt [ ].
   **Erster Logo-Browser-Export 15.11.2026 visuell bestanden:**
   0,5-s-Fade, Text und Logo durchgehend, aber wegen
   `shortest=1` beim geloopten PNG **nur 131 statt 132 Frames**
@@ -360,15 +372,20 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**Nächste mögliche Teilfunktion:** Einfache auswählbare
-Designvorlagen (z. B. „Klassisch“ und „Modern“) für
-Titel-/CTA-Layout und Abstände, zunächst mit lokalem
-FFmpeg-Rendering, sicherer Signatur und Tests.
-Die Vorlagen müssen vor einer Produktfreigabe separat mit
-realen Nutzer-MP4s geprüft werden.
+**Jetzt:** Geschützte Streamlit-Test-App rebooten und
+die Versionskennung `Designvorlagen 1 | 2026-11-24` prüfen.
+Danach mit dem gespeicherten 32-s-Landschafts-Testvideo und
+dem bereits vorhandenen Analyse-JSON **ohne neue KI-Kosten**
+zwei Clips laden. Text + CTA aktivieren, **Modern
+(linksbündig)** als Design wählen, optional die bekannte
+blaue Firmenfarbe und das DEMO-Logo übernehmen,
+0,5-s-Überblendung auswählen und den MP4-Export
+für die erste unabhängige visuelle Browserprüfung hochladen.
 
-**Markenfarbe 1:** echter MP4-Browser-Test sowie
-Farbwechsel-Cachetest erfolgreich abgeschlossen.
+**Bereits abgenommen:** Text-Overlay 1, Logo-Overlay 1,
+Markenfarbe 1 einschließlich der jeweiligen Browser-
+Cachetests; die beiden Designvorlagen bislang nur technisch
+mit 184 automatischen Tests bestätigt.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
