@@ -624,6 +624,7 @@ def render_test_reel(
             ])
             output_video_label = _append_reel_logo_overlay(
                 graph, output_video_label, logo_input_index,
+                safe_area_mode,
             )
         destination = target / "velocut_test_reel.mp4"
         cmd.extend([
