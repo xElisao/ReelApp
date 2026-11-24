@@ -33,6 +33,7 @@ MAX_REEL_BYTES = 40 * 1024 * 1024
 BACKGROUND_MODES = frozenset({"blur", "black"})
 AUDIO_MODES = frozenset({"mute", "original"})
 TRANSITION_MODES = frozenset({"cut", "fade"})
+DESIGN_TEMPLATES = frozenset({"classic", "modern"})
 FADE_SECONDS = 0.5  # Alter Standard, auch für bestehende Aufrufer.
 FADE_DURATIONS = frozenset({0.25, 0.5, 1.0})
 MAX_OVERLAY_CHARACTERS = 56
@@ -116,6 +117,7 @@ def _append_reel_text_overlays(
     title_text: str,
     cta_text: str,
     brand_color: str | None = None,
+    design_template: str = "classic",
 ) -> str:
     """Blendet optionale Texte in sicheren Bereichen ein, ohne KI-Aufruf.
 
@@ -133,31 +135,43 @@ def _append_reel_text_overlays(
     output_label = "video"
     box_color, font_color = _brand_text_style(brand_color)
     visible_seconds = min(OVERLAY_DURATION_SECONDS, total_seconds / 2.0)
+    # Klassisch bleibt pixelgenau wie bisher: mittig, bei y=150.
+    # Modern ist bewusst linksbündig und tiefer positioniert,
+    # mit kleinerer Schrift und kürzeren Zeilen, damit der Text
+    # auch bei breiten Zeichen innerhalb der Hochkantfläche bleibt.
+    if design_template == "classic":
+        wrap_width, font_size, border_width, line_spacing = 16, 30, 16, 6
+        x_position = "(w-text_w)/2"
+        title_y, cta_y = "150", "h-185-text_h"
+    else:
+        wrap_width, font_size, border_width, line_spacing = 14, 28, 12, 7
+        x_position = "44"
+        title_y, cta_y = "210", "h-235-text_h"
     for kind, text in (("title", title_text), ("cta", cta_text)):
         if not text:
             continue
         text_path = target / f"overlay_{kind}.txt"
         lines = textwrap.wrap(
-            text, width=16, break_long_words=True, break_on_hyphens=False,
+            text, width=wrap_width, break_long_words=True, break_on_hyphens=False,
         )
         text_path.write_text("\n".join(lines), encoding="utf-8")
         # Diese Pfade stammen nur aus unserem temporären Serververzeichnis.
         # Der Nutzer kann weder Pfad noch Filtergraph bestimmen.
         if kind == "title":
             enable = f"lt(t,{visible_seconds:.6f})"
-            y = "150"
+            y = title_y
         else:
             enable = f"gte(t,{total_seconds - visible_seconds:.6f})"
-            y = "h-185-text_h"
+            y = cta_y
         next_label = f"reel_{kind}"
         graph.append(
             f"[{output_label}]drawtext="
             f"fontfile='{OVERLAY_FONT_PATH.as_posix()}':"
             f"textfile='{text_path.as_posix()}':"
-            f"expansion=none:fontsize=30:fontcolor={font_color}:"
-            f"box=1:boxcolor={box_color}:boxborderw=16:"
-            "line_spacing=6:"
-            "x=(w-text_w)/2:"
+            f"expansion=none:fontsize={font_size}:fontcolor={font_color}:"
+            f"box=1:boxcolor={box_color}:boxborderw={border_width}:"
+            f"line_spacing={line_spacing}:"
+            f"x={x_position}:"
             f"y={y}:enable='{enable}'"
             f"[{next_label}]"
         )
@@ -358,6 +372,7 @@ def render_test_reel(
     cta_text: str = "",
     logo_png_bytes: bytes | None = None,
     brand_color: str | None = None,
+    design_template: str = "classic",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -379,6 +394,9 @@ def render_test_reel(
     deckend ein; schwarze/weiße Schrift hat den höheren Kontrast.
     Ohne Farbwahl bleibt die bisherige halbtransparente schwarze Box.
     Der Logo-Export bleibt unverändert.
+    Designvorlagen: "classic" belässt das bisherige mittige Layout.
+    "modern" platziert kürzer umbrochene Texte linksbündig, etwas
+    tiefer und mit schmalerer Textfläche; die Clipdauer bleibt gleich.
     """
     total_seconds = expected_reel_duration(
         segments, transition_mode=transition_mode,
@@ -387,6 +405,11 @@ def render_test_reel(
     title_text = normalize_overlay_text(title_text)
     cta_text = normalize_overlay_text(cta_text)
     brand_color = normalize_brand_color(brand_color)
+    if (
+        not isinstance(design_template, str)
+        or design_template not in DESIGN_TEMPLATES
+    ):
+        raise ReelExportError("Unbekannte Designvorlage. Bitte Klassisch oder Modern wählen.")
     # Wichtig: Bilddatei schon vor dem FFmpeg-Start validieren und
     # vollständig neu als PNG kodieren; nur die sichere Version nutzen.
     logo_png_bytes = normalize_logo_png(logo_png_bytes)
@@ -516,7 +539,7 @@ def render_test_reel(
             )
         output_video_label = _append_reel_text_overlays(
             graph, target, total_seconds, title_text, cta_text,
-            brand_color,
+            brand_color, design_template,
         )
         if logo_png_bytes is not None:
             logo_path = target / "brand_logo.png"
