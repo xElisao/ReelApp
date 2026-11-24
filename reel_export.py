@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageFont, UnidentifiedImageError
 
 
 MAX_SEGMENTS = 3
@@ -34,6 +34,17 @@ BACKGROUND_MODES = frozenset({"blur", "black"})
 AUDIO_MODES = frozenset({"mute", "original"})
 TRANSITION_MODES = frozenset({"cut", "fade"})
 DESIGN_TEMPLATES = frozenset({"classic", "modern"})
+SAFE_AREA_MODES = frozenset({"off", "social"})
+# Gemeinsamer konservativer Bereich für 540×960-Reels. Meta nennt
+# ca. 14% oben, 35% unten und 6% an den Seiten; TikTok reserviert
+# zusätzliche Fläche rechts für Aktionen. Kein Plattformversprechen:
+# Gerät, UI, Bildbeschreibung und Anzeigenformat können abweichen.
+SOCIAL_SAFE_LEFT = 60
+SOCIAL_SAFE_RIGHT = 390
+SOCIAL_SAFE_TOP = 145
+SOCIAL_SAFE_BOTTOM = 615
+SOCIAL_LOGO_LEFT = 72
+SOCIAL_LOGO_TOP = 152
 FADE_SECONDS = 0.5  # Alter Standard, auch für bestehende Aufrufer.
 FADE_DURATIONS = frozenset({0.25, 0.5, 1.0})
 MAX_OVERLAY_CHARACTERS = 56
@@ -110,6 +121,44 @@ def _brand_text_style(brand_color: str | None) -> tuple[str, str]:
     return f"0x{brand_color[1:]}", font_color
 
 
+def _wrap_social_text(value: str, font_size: int) -> list[str]:
+    """Umbruch nach tatsächlicher Schriftbreite statt Zeichenzahl.
+
+    Einschließlich Textboxrand bleibt die Schrift innerhalb des
+    konservativen Social-Reel-Korridors. Lange Wörter werden
+    gegebenenfalls zeichenweise umgebrochen.
+    """
+    font = ImageFont.truetype(str(OVERLAY_FONT_PATH), font_size)
+    max_width = 280
+    lines: list[str] = []
+    current = ""
+    for word in value.split():
+        candidate = f"{current} {word}".strip()
+        if font.getlength(candidate) <= max_width:
+            current = candidate
+            continue
+        if current:
+            lines.append(current)
+            current = ""
+        if font.getlength(word) <= max_width:
+            current = word
+            continue
+        for character in word:
+            if current and font.getlength(current + character) > max_width:
+                lines.append(current)
+                current = character
+            else:
+                current += character
+    if current:
+        lines.append(current)
+    if len(lines) > 7:
+        raise ReelExportError(
+            "Der Text ist zu lang für den Social-Schutzbereich. "
+            "Bitte Titel oder Schlusszeile kürzen."
+        )
+    return lines
+
+
 def _append_reel_text_overlays(
     graph: list[str],
     target: Path,
@@ -118,6 +167,7 @@ def _append_reel_text_overlays(
     cta_text: str,
     brand_color: str | None = None,
     design_template: str = "classic",
+    safe_area_mode: str = "off",
 ) -> str:
     """Blendet optionale Texte in sicheren Bereichen ein, ohne KI-Aufruf.
 
@@ -147,13 +197,26 @@ def _append_reel_text_overlays(
         wrap_width, font_size, border_width, line_spacing = 14, 28, 12, 7
         x_position = "44"
         title_y, cta_y = "210", "h-235-text_h"
+    if safe_area_mode == "social":
+        # Logo links oben im Schutzbereich, Text darunter; die
+        # unteren 35% und die rechte Schaltflächenspalte sind frei.
+        # Alte Layouts bleiben bei safe_area_mode="off" unverändert.
+        font_size = 27 if design_template == "classic" else 26
+        border_width, line_spacing = 10, 5
+        x_position = "(450-text_w)/2" if design_template == "classic" else "72"
+        title_y = "272" if design_template == "classic" else "285"
+        cta_y = "600-text_h" if design_template == "classic" else "595-text_h"
     for kind, text in (("title", title_text), ("cta", cta_text)):
         if not text:
             continue
         text_path = target / f"overlay_{kind}.txt"
-        lines = textwrap.wrap(
-            text, width=wrap_width, break_long_words=True, break_on_hyphens=False,
-        )
+        if safe_area_mode == "social":
+            lines = _wrap_social_text(text, font_size)
+        else:
+            lines = textwrap.wrap(
+                text, width=wrap_width,
+                break_long_words=True, break_on_hyphens=False,
+            )
         text_path.write_text("\n".join(lines), encoding="utf-8")
         # Diese Pfade stammen nur aus unserem temporären Serververzeichnis.
         # Der Nutzer kann weder Pfad noch Filtergraph bestimmen.
@@ -229,11 +292,16 @@ def normalize_logo_png(logo_png_bytes: bytes | None) -> bytes | None:
 def _append_reel_logo_overlay(
     graph: list[str], output_video_label: str,
     logo_input_index: int,
+    safe_area_mode: str = "off",
 ) -> str:
-    """Legt das geprüfte PNG in die rechte obere Ecke des fertigen Reels."""
+    """Setzt das gereinigte Logo in die ausgewählte sichere Position."""
+    if safe_area_mode == "social":
+        x_pos, y_pos = str(SOCIAL_LOGO_LEFT), str(SOCIAL_LOGO_TOP)
+    else:
+        x_pos, y_pos = f"W-w-{LOGO_MARGIN_RIGHT}", str(LOGO_MARGIN_TOP)
     graph.append(
         f"[{output_video_label}][{logo_input_index}:v:0]"
-        f"overlay=x=W-w-{LOGO_MARGIN_RIGHT}:y={LOGO_MARGIN_TOP}:"
+        f"overlay=x={x_pos}:y={y_pos}:"
         "shortest=0:format=auto,"
         "format=yuv420p,settb=AVTB,fps=24"
         "[video_logo]"
@@ -373,6 +441,7 @@ def render_test_reel(
     logo_png_bytes: bytes | None = None,
     brand_color: str | None = None,
     design_template: str = "classic",
+    safe_area_mode: str = "off",
     timeout_seconds: int = 100,
 ) -> bytes:
     """Fügt bis zu drei kurze Clips mit normalisierter Hochkant-Leinwand zusammen.
@@ -397,6 +466,9 @@ def render_test_reel(
     Designvorlagen: "classic" belässt das bisherige mittige Layout.
     "modern" platziert kürzer umbrochene Texte linksbündig, etwas
     tiefer und mit schmalerer Textfläche; die Clipdauer bleibt gleich.
+    Optionaler Social-Schutzbereich verschiebt Text und Logo in
+    einen bewusst konservativen zentralen Korridor; alte Exporte
+    bleiben ohne diese Option unverändert.
     """
     total_seconds = expected_reel_duration(
         segments, transition_mode=transition_mode,
@@ -405,6 +477,8 @@ def render_test_reel(
     title_text = normalize_overlay_text(title_text)
     cta_text = normalize_overlay_text(cta_text)
     brand_color = normalize_brand_color(brand_color)
+    if not isinstance(safe_area_mode, str) or safe_area_mode not in SAFE_AREA_MODES:
+        raise ReelExportError("Ungültiger Social-Schutzbereich.")
     if (
         not isinstance(design_template, str)
         or design_template not in DESIGN_TEMPLATES
@@ -539,7 +613,7 @@ def render_test_reel(
             )
         output_video_label = _append_reel_text_overlays(
             graph, target, total_seconds, title_text, cta_text,
-            brand_color, design_template,
+            brand_color, design_template, safe_area_mode,
         )
         if logo_png_bytes is not None:
             logo_path = target / "brand_logo.png"
