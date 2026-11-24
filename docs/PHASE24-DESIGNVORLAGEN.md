@@ -114,10 +114,16 @@ Python 3.12 und 3.13.
       Logo und CTA bis zum Ende vorhanden, kein Beschnitt.
       **Modern mit Markenfarbe/Logo/Fade in echter Nutzer-MP4
       praxisbestätigt**. MP4 wurde nicht ins Repo kopiert.
-- [ ] **Browser-Cache-Test:** nach dem Modern-Export
-      nur zur Designvorlage `Klassisch` wechseln,
-      ohne erneut zu rendern. Die alte Vorschau
-      darf nicht mehr als aktuell angezeigt werden.
+- [x] **Browser-Cache-Test bestanden (24.11.2026):** Nach dem
+      erfolgreichen Modern-Export stellte der Nutzer **nur**
+      die Designvorlage von `Modern (linksbündig)` auf
+      `Klassisch (wie bisher)` zurück, **ohne** einen neuen
+      MP4-Export zu starten. Der Nutzer bestätigte ausdrücklich:
+      „Ja sie verschwindet“ – die alte Modern-Videovorschau
+      wird nicht mehr angezeigt. Der Download hängt technisch
+      an derselben Reel-Signatur; nicht separat bestätigt.
+      **Designvorlagen-1-Teilfunktion (Klassisch/Modern) inklusive
+      realem Modern-MP4 und Browser-Cache-Wechsel abgenommen.**
 - [ ] Weitere Layouts/Schriftarten, unterschiedliche
       Quellbilder, umfassende Social-Safe-Area-Tests,
       barrierearme Vorlagen und Freigabe vor Verkauf.
