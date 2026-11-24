@@ -36,7 +36,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Designvorlagen 1 | 2026-11-24"
+LAB_BUILD = "Social-Schutzbereich 1 | 2026-11-24"
 
 
 st.set_page_config(
@@ -1038,6 +1038,28 @@ if clips_to_show:
         else ("invalid" if logo_upload is not None else None)
     )
 
+    st.markdown("##### 📱 Instagram & TikTok (optional)")
+    reel_social_safe = st.checkbox(
+        "Texte und Logo vor App-Schaltflächen schützen",
+        value=True,
+        key=f"velocut_reel_social_safe_{preview_identifier}",
+        help=(
+            "Verschiebt Texte und Logo in eine konservative gemeinsame "
+            "Schutzfläche für Instagram Reels und TikTok. "
+            "Die Bildschirmoberflächen können je nach Gerät und "
+            "Plattform abweichen. Bitte vor Veröffentlichung prüfen."
+        ),
+    )
+    reel_safe_area_mode = "social" if reel_social_safe else "off"
+    if reel_social_safe:
+        st.caption(
+            "Empfohlen: Schaltflächen rechts, Kopfzeile und untere "
+            "Bildbeschreibungen bleiben frei. Das Logo sitzt dann "
+            "links oberhalb des Textes. Prüfe die fertige MP4 "
+            "in Instagram/TikTok vor der Veröffentlichung. "
+            "Ohne Schutzmodus gilt die bisherige Positionierung."
+        )
+
     order_valid = True
     if reel_order == "Chronologisch":
         selected_for_reel.sort(
@@ -1121,7 +1143,7 @@ if clips_to_show:
                 reel_audio_mode, reel_transition_mode,
                 reel_fade_duration, reel_title_text, reel_cta_text,
                 reel_brand_color, reel_design_template,
-                reel_logo_signature, selected_edits_signature,
+                reel_safe_area_mode, reel_logo_signature, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -1182,6 +1204,7 @@ if clips_to_show:
                     logo_png_bytes=reel_logo_bytes,
                     brand_color=reel_brand_color,
                     design_template=reel_design_template,
+                    safe_area_mode=reel_safe_area_mode,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1212,6 +1235,7 @@ if clips_to_show:
                 f"{'_text' if reel_title_text or reel_cta_text else ''}"
                 f"{'_brand' if reel_brand_color is not None else ''}"
                 f"{'_modern' if reel_design_template == 'modern' else ''}"
+                f"{'_social' if reel_safe_area_mode == 'social' else ''}"
                 f"{'_logo' if reel_logo_bytes is not None else ''}.mp4"
             ),
             mime="video/mp4",
