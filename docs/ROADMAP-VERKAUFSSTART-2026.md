@@ -176,6 +176,28 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
   **184/184 automatische Tests grün**, inklusive echter
   MP4-Renderings beider Designs mit Text, Farbe und Logo.
   [PHASE24-DESIGNVORLAGEN.md](PHASE24-DESIGNVORLAGEN.md).
+  **Social-Schutzbereich-1-Teilfunktion 24.11.2026 implementiert:**
+  Optionale Checkbox für eine konservative gemeinsame
+  Instagram-Reels-/TikTok-Schutzzone für Text und PNG-Logo,
+  **in der Streamlit-Test-App standardmäßig aktiv**.
+  Meta empfiehlt für Reels ca. 14% oben, 35% unten und
+  6% Seitenabstand; TikTok verweist auf variierende
+  In-Feed-Safe-Zone-Dateien und eine rechts liegende
+  Aktionsspalte. Auf 540×960 für unsere Laborversion
+  gewählte gemeinsame Arbeitsfläche: **x=60..390,
+  y=145..615**. Das Logo wandert bei aktiviertem
+  Schutz nach links oben auf x=72/y=152, Titel
+  darunter und CTA oberhalb der unteren App-Leisten.
+  Pixelbasierter Textumbruch mit Pillow/DejaVu und
+  festen FFmpeg-Koordinaten; klassisch/modern,
+  Markenfarben, Fade/Audio bleiben kombinierbar.
+  Streng validierter `safe_area_mode="off"|"social"`;
+  alte Python-Aufrufer bleiben auf `"off"`,
+  Änderungen im Editor invalidieren die Vorschau-
+  und Download-Signatur. Kein KI-API-Aufruf.
+  [PHASE25-SOCIAL-SAFE-AREA.md](PHASE25-SOCIAL-SAFE-AREA.md).
+  **Echter Nutzer-Browser-Test und Schutzmodus-Cache-Wechsel
+  noch offen; keine universelle Plattformgarantie.**
   **Realer Nutzer-MP4-Test mit Design Modern am 24.11.2026
   bestanden:** Datei
   `velocut_test_reel_9x16_blur_mute_fade_050cs_text_brand_modern_logo.mp4`
@@ -391,12 +413,20 @@ Modern-MP4 mit 5,500 s / 132 Frames visuell erfolgreich;
 Browser-Cache-Wechsel Modern → Klassisch vom Nutzer bestätigt.
 **184/184 Tests grün.**
 
-**Als nächstes sinnvoll:** Weiteren F2-02-Designumfang
-auf echte Produktreife priorisieren (Social-Safe-Areas,
-Textumbruch bei langen Inhalten, Layout-/Schriftoptionen)
-oder danach F2-03 Untertitel schrittweise beginnen.
-Den **vollständigen** Punkt F2-02 und alle Schritte zur
-Verkaufsfreigabe weiterhin als offen behandeln.
+**Jetzt:** Geschützte Streamlit-App rebooten und
+Label `Social-Schutzbereich 1 | 2026-11-24` bestätigen.
+Danach bei vorhandenem Video + gespeicherter Vorschau-JSON
+ohne KI erneut die beiden Landschaftsszenen laden und
+Modern + Blau `#245582` + Titel/CTA + DEMO-Logo +
+0,5-s-Fade rendern, **mit aktivierter neuer Checkbox
+`Texte und Logo vor App-Schaltflächen schützen`**.
+MP4 im Chat hochladen. Wir kontrollieren Titel/CTA/Logo
+im mittleren Bereich sowie die exakten 5,500 s / 132 Frames.
+Anschließend den Cache-Test des Schutzmodus durchführen.
+
+**Noch offen:** universelle Social-Safe-Area-Abnahme auf
+echten Zielgeräten, das vollständige F2-02 Brand Kit
+und sämtliche Produktions-/Verkaufsfreigaben.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
