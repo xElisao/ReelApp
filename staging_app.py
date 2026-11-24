@@ -36,7 +36,7 @@ from reel_export import (
 from staging_preflight import VideoPreflightError, inspect_videos
 
 
-LAB_BUILD = "Markenfarbe 1 | 2026-11-15"
+LAB_BUILD = "Designvorlagen 1 | 2026-11-24"
 
 
 st.set_page_config(
@@ -941,6 +941,7 @@ if clips_to_show:
     reel_title_text = ""
     reel_cta_text = ""
     reel_brand_color = None
+    reel_design_template = "classic"
     if reel_text_enabled:
         reel_title_text = st.text_input(
             "Titel am Anfang",
@@ -964,6 +965,22 @@ if clips_to_show:
         )
         if not reel_title_text and not reel_cta_text:
             st.info("Trage einen Titel oder eine Schlusszeile ein, um Text einzublenden.")
+        reel_design_label = st.radio(
+            "Designvorlage für Titel und Schlusszeile",
+            ["Klassisch (wie bisher)", "Modern (linksbündig)"],
+            horizontal=True,
+            index=0,
+            key=f"velocut_reel_design_{preview_identifier}",
+            help=(
+                "Klassisch: mittig und vertraut. "
+                "Modern: linksbündig, mit etwas kleinerer Schrift "
+                "und großzügigeren Abständen. Beide bleiben innerhalb "
+                "des Hochkantvideos und funktionieren mit Firmenfarben."
+            ),
+        )
+        reel_design_template = (
+            "modern" if reel_design_label.startswith("Modern") else "classic"
+        )
         brand_color_enabled = st.checkbox(
             "Firmenfarbe für die Textflächen verwenden",
             value=False,
@@ -1103,7 +1120,8 @@ if clips_to_show:
                 preview_identifier, reel_order, reel_background_mode,
                 reel_audio_mode, reel_transition_mode,
                 reel_fade_duration, reel_title_text, reel_cta_text,
-                reel_brand_color, reel_logo_signature, selected_edits_signature,
+                reel_brand_color, reel_design_template,
+                reel_logo_signature, selected_edits_signature,
             ],
             ensure_ascii=True,
         ).encode("utf-8")
@@ -1163,6 +1181,7 @@ if clips_to_show:
                     cta_text=reel_cta_text,
                     logo_png_bytes=reel_logo_bytes,
                     brand_color=reel_brand_color,
+                    design_template=reel_design_template,
                 )
                 st.session_state["velocut_reel_bytes"] = output
                 st.session_state["velocut_reel_signature"] = reel_signature
@@ -1192,6 +1211,7 @@ if clips_to_show:
                 f"{f'_{int(reel_fade_duration * 100):03d}cs' if reel_transition_mode == 'fade' else ''}"
                 f"{'_text' if reel_title_text or reel_cta_text else ''}"
                 f"{'_brand' if reel_brand_color is not None else ''}"
+                f"{'_modern' if reel_design_template == 'modern' else ''}"
                 f"{'_logo' if reel_logo_bytes is not None else ''}.mp4"
             ),
             mime="video/mp4",
