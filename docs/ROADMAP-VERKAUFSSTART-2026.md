@@ -386,18 +386,17 @@ Diesen Zahlungs- und Anmeldepfad nicht ungeprüft in den Verkauf übernehmen.
 
 ## Nächster Arbeitsschritt (genau einer je Gespräch)
 
-**Jetzt:** Im bestehenden, erfolgreich exportierten
-**Modern-Reel** nur die Designvorlage auf
-`Klassisch (wie bisher)` zurückstellen – **ohne** erneut
-`Reel verbinden` zu klicken. Die vorherige Videovorschau
-mit dem Modern-Layout muss wegen geänderter Reel-Signatur
-verschwinden. Nach Nutzerrückmeldung den manuellen
-Cache-Test dokumentieren.
+**Stand 24.11.2026:** Designvorlagen-1-Test abgeschlossen.
+Modern-MP4 mit 5,500 s / 132 Frames visuell erfolgreich;
+Browser-Cache-Wechsel Modern → Klassisch vom Nutzer bestätigt.
+**184/184 Tests grün.**
 
-**Bereits bestätigt:** Text-Overlay 1, Logo-Overlay 1,
-Markenfarbe 1 und echtes Modern-Design-MP4 mit
-5,500 s / 132 Frames. 184/184 automatisierte Tests grün.
-Das vollständige F2-02-Brand-Kit bleibt offen.
+**Als nächstes sinnvoll:** Weiteren F2-02-Designumfang
+auf echte Produktreife priorisieren (Social-Safe-Areas,
+Textumbruch bei langen Inhalten, Layout-/Schriftoptionen)
+oder danach F2-03 Untertitel schrittweise beginnen.
+Den **vollständigen** Punkt F2-02 und alle Schritte zur
+Verkaufsfreigabe weiterhin als offen behandeln.
 
 **P0-01 Marken-/Namensfreigabe** bleibt für den öffentlichen
 Verkaufsstart offen und darf nicht durch einen internen
