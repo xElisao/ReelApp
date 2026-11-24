@@ -126,15 +126,21 @@ Neue Datei `tests/test_reel_social_safe_area.py`:
    Exakte Videolänge/Bildanzahl, Positionierung und
    reservierte Bereiche werden kontrolliert.
 
-**CI:** noch bis zum GitHub-Ergebnis zu bestätigen
-(geplant: 184 bisherige + 4 neue = **188 Tests**).
+**CI erfolgreich:** **188 von 188 Tests** (184 bestehende +
+vier neue Social-Schutzbereich-Tests). GitHub-Actions-
+Push-/PR-Läufe auf Commit `d55d410d` erfolgreich,
+insbesondere `unit-tests` mit echten FFmpeg-Exports
+für Klassisch/Modern, Markenfarbe und Logo.
+Staging-Abhängigkeiten Python 3.12/3.13 ebenfalls grün.
+Der nachfolgende Testpositions-Fix `9ab31ec5`
+ändert ausschließlich die Prüfstelle im Testbild.
 
 ## Browser-Abnahme noch offen
 
 - [x] Schutzbereich im FFmpeg-Export und sichere Platzierung
 - [x] Schalter in Test-App, Default ein, Cache-Signatur
 - [x] Automatisierte Tests angelegt
-- [ ] GitHub CI abschließend bestätigen
+- [x] GitHub CI: 188/188 Tests und Python 3.12/3.13 grün
 - [ ] **Echter Nutzer-MP4-Test:** Geschützte Streamlit-App
       rebooten; oben `Social-Schutzbereich 1 | 2026-11-24`
       prüfen. Bestehende zwei Landschaftsclips mit
