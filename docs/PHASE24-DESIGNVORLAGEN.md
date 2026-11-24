@@ -89,17 +89,31 @@ Python 3.12 und 3.13.
 - [x] Auswahlschalter in Streamlit und Cache-Signatur
 - [x] Automatisierte Prüffälle hinzugefügt
 - [x] GitHub-CI inklusive realem FFmpeg-Abnahmetest: 184 Tests grün
-- [ ] **Echter Nutzer-Browser-Praxistest:** geschützte
-      Streamlit-Test-App rebooten, Build-Label
-      `Designvorlagen 1 | 2026-11-24` prüfen.
-      Die bekannten 2 Landschaftsszenen mit
-      gespeicherter Vorschau **ohne neue KI** laden;
-      Titel/CTA und optional Blau `#245582` plus
-      DEMO-Logo aktivieren, 0,5-s-Fade auswählen,
-      **Modern (linksbündig)** als Designvorlage wählen,
-      MP4 rendern und im Chat hochladen.
-      Visuelle Differenz und vollständige Laufzeit
-      unabhängig kontrollieren.
+- [x] **Echter Nutzer-Browser-Praxistest bestanden (24.11.2026):**
+      Nach bestätigtem Staging-Reboot und Versionslabel
+      `Designvorlagen 1 | 2026-11-24` wurden die zwei
+      gespeicherten Landschaftsszenen ohne neue KI-Analyse
+      geladen. Nutzer exportierte mit **Modern (linksbündig)**,
+      Titel `Bergstraßen entdecken`, CTA `Mehr entdecken`,
+      Blau `#245582`, DEMO-PNG-Logo, unscharfem Hintergrund,
+      0,50-s-Fade und ohne Ton die echte Datei
+      `velocut_test_reel_9x16_blur_mute_fade_050cs_text_brand_modern_logo.mp4`.
+      Unabhängig mit `ffprobe` geprüft: **5,500000 s**,
+      **exakt 132 Bilder**, konstante **24 fps**,
+      **540 × 960**, **H.264 / yuv420p**, **279.858 Bytes**,
+      nur Videospur (kein Ton). FFmpeg hat das Video
+      **vollständig und fehlerfrei dekodiert**.
+      **16 Stichprobenbilder zwischen 0,292 und 5,417 s**
+      belegen den linksbündigen Titel bei der gegenüber
+      Klassisch tieferen Position, linksbündige Schlusszeile
+      am Ende, korrekt blaue Textflächen mit weißer Schrift,
+      durchgehendes DEMO-Logo oben rechts und weichen
+      Szenenübergang um 2,5–3,0 s.
+      Zusätzlich **das tatsächliche letzte Bild 131/131
+      bei 5,458 s** einzeln dekodiert und geprüft:
+      Logo und CTA bis zum Ende vorhanden, kein Beschnitt.
+      **Modern mit Markenfarbe/Logo/Fade in echter Nutzer-MP4
+      praxisbestätigt**. MP4 wurde nicht ins Repo kopiert.
 - [ ] **Browser-Cache-Test:** nach dem Modern-Export
       nur zur Designvorlage `Klassisch` wechseln,
       ohne erneut zu rendern. Die alte Vorschau
