@@ -75,15 +75,20 @@ Neue Datei `tests/test_reel_design_templates.py`:
    Audiospuren sowie konkrete Pixelpositionen werden
    unabhängig geprüft.
 
-**CI-Status:** wird nach Abschluss der aktuellen
-GitHub-Actions-Läufe nachgetragen.
+**CI-Status: erfolgreich** – **184/184 automatische Tests grün**,
+darunter die vier neuen Designvorlagen-Tests mit echtem
+FFmpeg-Rendering und Farb-/Logo-Pixelprüfung.
+GitHub-Actions Push-Lauf `45424555567` auf Commit
+`7fdb81b1`: `unit-tests` erfolgreich, ebenso
+die Staging-Abhängigkeitsprüfungen unter
+Python 3.12 und 3.13.
 
 ## Noch offen
 
 - [x] Designvorlagen mit sicherer Validierung im MP4-Export
 - [x] Auswahlschalter in Streamlit und Cache-Signatur
 - [x] Automatisierte Prüffälle hinzugefügt
-- [ ] GitHub-CI inklusive realem FFmpeg-Abnahmetest bestätigen
+- [x] GitHub-CI inklusive realem FFmpeg-Abnahmetest: 184 Tests grün
 - [ ] **Echter Nutzer-Browser-Praxistest:** geschützte
       Streamlit-Test-App rebooten, Build-Label
       `Designvorlagen 1 | 2026-11-24` prüfen.
